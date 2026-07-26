@@ -7,11 +7,12 @@ from app.cache.topology_cache import TopologyCache
 from app.config import settings
 from app.schemas.topology import (
     WarehouseCreate, WarehouseResponse, WarehouseDetail,
-    ZoneCreate, ZoneResponse,
+    ZoneBase, ZoneCreate, ZoneResponse,
     AisleCreate, AisleResponse,
     RackCreate, RackResponse,
     ShelfCreate, ShelfResponse,
-    BinCreate, BinResponse, BinDetail
+    BinCreate, BinResponse, BinDetail,
+    ProductCreate, ProductResponse, BulkDeleteRequest
 )
 
 router = APIRouter()
@@ -82,3 +83,31 @@ async def seed_demo(warehouse_id: str, db: AsyncSession = Depends(get_db)):
     await repo.seed_demo_warehouse(warehouse_id)
     await cache.invalidate_topology(warehouse_id)
     return {"status": "success", "message": "Demo data populated"}
+
+@router.get("/products", response_model=List[ProductResponse])
+async def list_products(db: AsyncSession = Depends(get_db)):
+    repo = TopologyRepository(db)
+    return await repo.get_products()
+
+@router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
+async def create_product(data: ProductCreate, db: AsyncSession = Depends(get_db)):
+    repo = TopologyRepository(db)
+    existing = await repo.get_product_by_sku(data.sku)
+    if existing:
+        raise HTTPException(status_code=400, detail="Product with this SKU already exists")
+    return await repo.create_product(data)
+
+@router.delete("/products/{sku}")
+async def delete_product(sku: str, db: AsyncSession = Depends(get_db)):
+    repo = TopologyRepository(db)
+    existing = await repo.get_product_by_sku(sku)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Product not found")
+    await repo.delete_product_by_sku(sku)
+    return {"status": "success", "message": f"Product {sku} deleted successfully"}
+
+@router.post("/products/delete-bulk")
+async def delete_products_bulk(data: BulkDeleteRequest, db: AsyncSession = Depends(get_db)):
+    repo = TopologyRepository(db)
+    await repo.delete_products_bulk(data.skus)
+    return {"status": "success", "message": f"Bulk deleted {len(data.skus)} products"}
