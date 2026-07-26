@@ -48,6 +48,7 @@ function getNavItems(role: UserRole): NavItem[] {
     case 'WAREHOUSE_SUPERVISOR':
       return [
         { label: 'Dashboard', path: '/supervisor/dashboard', icon: <LayoutDashboard size={18} /> },
+        { label: 'Inventory Manager', path: '/supervisor/inventory', icon: <Package size={18} /> },
         { label: 'Mission Control', path: '/supervisor/missions', icon: <Rocket size={18} /> },
         { label: 'Alert Center', path: '/supervisor/alerts', icon: <AlertTriangle size={18} /> },
         { label: 'Team Monitor', path: '/supervisor/team', icon: <Users size={18} /> },
