@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import { Compass, Play, Pause, XCircle, Plus, Calendar, Compass as CompassIcon, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Pause, Plus, Calendar, Compass, RefreshCw } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
-import { MOCK_MISSIONS } from '../../api/mockData';
+import { MOCK_MISSIONS, MOCK_ROBOTS } from '../../api/mockData';
 
 export default function MissionControl() {
   const [missions, setMissions] = useState(MOCK_MISSIONS);
@@ -13,13 +13,34 @@ export default function MissionControl() {
   
   // Create mission states
   const [name, setName] = useState('');
+  const [isNameCustom, setIsNameCustom] = useState(false);
   const [priority, setPriority] = useState('MEDIUM');
+  const [auditScope, setAuditScope] = useState<'FULL' | 'ZONE' | 'AISLE' | 'RACK'>('ZONE');
   const [zone, setZone] = useState('Zone A');
+  const [targetAisle, setTargetAisle] = useState('Aisle 1');
+  const [targetRack, setTargetRack] = useState('Rack A1');
+  const [assignedRobotId, setAssignedRobotId] = useState('robot-001');
+
+  // Auto-generate name based on configuration if it hasn't been custom edited
+  useEffect(() => {
+    if (isNameCustom) return;
+    let autoName = '';
+    if (auditScope === 'FULL') {
+      autoName = 'Full Warehouse Audit';
+    } else if (auditScope === 'ZONE') {
+      autoName = `${zone} Full Audit`;
+    } else if (auditScope === 'AISLE') {
+      autoName = `${targetAisle} Spot Check`;
+    } else if (auditScope === 'RACK') {
+      autoName = `${targetRack} Detail Scan`;
+    }
+    setName(autoName);
+  }, [auditScope, zone, targetAisle, targetRack, isNameCustom]);
 
   const handleAction = (id: string, action: string) => {
     setMissions(prev => prev.map(m => {
       if (m.id === id) {
-        if (action === 'PAUSE') return { ...m, status: 'CANCELLED' }; // represent pause/cancel
+        if (action === 'PAUSE') return { ...m, status: 'CANCELLED' }; 
         if (action === 'RESUME') return { ...m, status: 'IN_PROGRESS' };
         return m;
       }
@@ -29,21 +50,47 @@ export default function MissionControl() {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Determine target bin count
+    let binsTotal = 24;
+    let targetScopeId = 'All';
+    if (auditScope === 'FULL') {
+      binsTotal = 300;
+      targetScopeId = 'All';
+    } else if (auditScope === 'ZONE') {
+      targetScopeId = zone;
+      if (zone === 'Zone A') binsTotal = 80;
+      else if (zone === 'Zone B') binsTotal = 150;
+      else binsTotal = 70;
+    } else if (auditScope === 'AISLE') {
+      targetScopeId = targetAisle;
+      binsTotal = 24;
+    } else if (auditScope === 'RACK') {
+      targetScopeId = targetRack;
+      binsTotal = 8;
+    }
+
+    const assignedRobot = MOCK_ROBOTS.find(r => r.id === assignedRobotId);
+
     const newMission = {
       id: `mission-00${missions.length + 1}`,
       name,
       warehouse_id: 'wh-001',
-      robot_id: 'robot-001',
+      robot_id: assignedRobotId,
+      robot_name: assignedRobot?.name || 'Unknown',
       status: 'SCHEDULED' as const,
       priority: priority as any,
       progress_percent: 0,
       bins_scanned: 0,
-      bins_total: 24,
+      bins_total: binsTotal,
       created_at: new Date().toISOString(),
+      audit_scope: auditScope,
+      target_scope_id: targetScopeId,
     };
     setMissions([newMission, ...missions]);
     setIsModalOpen(false);
     setName('');
+    setIsNameCustom(false);
   };
 
   return (
@@ -68,7 +115,14 @@ export default function MissionControl() {
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-semibold text-slate-200">{mission.name}</h3>
-                  <span className="text-[10px] text-indigo-400 font-mono">{mission.id}</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-indigo-400 font-mono">{mission.id}</span>
+                    {mission.audit_scope && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/05 border border-white/08 text-slate-400 font-semibold font-mono uppercase">
+                        {mission.audit_scope}: {mission.target_scope_id}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-indigo-500/10 text-indigo-400 animate-pulse">
                   {mission.status}
@@ -89,7 +143,7 @@ export default function MissionControl() {
               <div className="grid grid-cols-2 gap-4 py-2 border-t border-b border-white/06 text-xs text-slate-400">
                 <div>
                   <span>Robot assigned:</span>
-                  <span className="block font-semibold text-slate-200">{mission.robot_id || 'Unassigned'}</span>
+                  <span className="block font-semibold text-slate-200">{mission.robot_name || mission.robot_id || 'Unassigned'}</span>
                 </div>
                 <div>
                   <span>Bins scanned:</span>
@@ -116,14 +170,24 @@ export default function MissionControl() {
         <h2 className="text-lg font-semibold text-slate-100">Scheduled Audit Queue</h2>
         <Card className="p-0 overflow-hidden">
           <Table
-            headers={['ID', 'Audit Name', 'Priority', 'Bins Code Count', 'Status', 'Actions']}
+            headers={['ID', 'Audit Name', 'Scope', 'Priority', 'Target Bins', 'Assigned Robot', 'Status', 'Actions']}
             rows={missions.filter(m => m.status !== 'IN_PROGRESS').map(m => [
               <span key={m.id} className="font-mono text-xs text-slate-400">{m.id}</span>,
-              <span key={m.id} className="font-semibold text-slate-200">{m.name}</span>,
+              <div key={m.id} className="flex flex-col">
+                <span className="font-semibold text-slate-200">{m.name}</span>
+                <span className="text-[10px] text-slate-500">{new Date(m.created_at).toLocaleDateString()}</span>
+              </div>,
+              <span key={m.id} className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/05 border border-white/08 text-slate-350 font-mono uppercase">
+                {m.audit_scope ? `${m.audit_scope}: ${m.target_scope_id}` : 'ZONE: Zone A'}
+              </span>,
               <span key={m.id} className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                m.priority === 'HIGH' ? 'bg-orange-500/10 text-orange-400' : 'bg-blue-500/10 text-blue-400'
+                m.priority === 'CRITICAL' ? 'bg-red-500/10 text-red-400' :
+                m.priority === 'HIGH' ? 'bg-orange-500/10 text-orange-400' : 
+                m.priority === 'MEDIUM' ? 'bg-indigo-500/10 text-indigo-400' :
+                'bg-slate-500/10 text-slate-400'
               }`}>{m.priority}</span>,
-              <span key={m.id} className="font-mono text-slate-300">{m.bins_total}</span>,
+              <span key={m.id} className="font-mono text-slate-300">{m.bins_total} bins</span>,
+              <span key={m.id} className="text-xs text-slate-400 font-medium">{m.robot_name || 'Unassigned'}</span>,
               <span key={m.id} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                 m.status === 'SCHEDULED' ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'
               }`}>{m.status}</span>,
@@ -150,21 +214,98 @@ export default function MissionControl() {
             label="Audit Mission Name"
             placeholder="e.g. Zone A Full Stock Count"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setIsNameCustom(true);
+            }}
             required
           />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-400">Target Zone</label>
+              <label className="text-xs font-semibold text-slate-400">Audit Scope</label>
               <select
-                value={zone}
-                onChange={(e) => setZone(e.target.value)}
+                value={auditScope}
+                onChange={(e) => setAuditScope(e.target.value as any)}
                 className="w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none bg-slate-900 border border-white/08 focus:border-indigo-500/50"
               >
-                <option value="Zone A">Zone A (Electronics)</option>
-                <option value="Zone B">Zone B (Furniture)</option>
-                <option value="Zone C">Zone C (Books)</option>
+                <option value="FULL">Full Warehouse</option>
+                <option value="ZONE">Specific Zone</option>
+                <option value="AISLE">Specific Aisle</option>
+                <option value="RACK">Specific Rack</option>
+              </select>
+            </div>
+
+            {/* Target Selectors */}
+            {auditScope === 'ZONE' && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400">Target Zone</label>
+                <select
+                  value={zone}
+                  onChange={(e) => setZone(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none bg-slate-900 border border-white/08 focus:border-indigo-500/50"
+                >
+                  <option value="Zone A">Zone A (Electronics)</option>
+                  <option value="Zone B">Zone B (Furniture)</option>
+                  <option value="Zone C">Zone C (Books)</option>
+                </select>
+              </div>
+            )}
+
+            {auditScope === 'AISLE' && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400">Target Aisle</label>
+                <select
+                  value={targetAisle}
+                  onChange={(e) => setTargetAisle(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none bg-slate-900 border border-white/08 focus:border-indigo-500/50"
+                >
+                  <option value="Aisle 1">Aisle 1</option>
+                  <option value="Aisle 2">Aisle 2</option>
+                  <option value="Aisle 3">Aisle 3</option>
+                  <option value="Aisle 4">Aisle 4</option>
+                  <option value="Aisle 5">Aisle 5</option>
+                </select>
+              </div>
+            )}
+
+            {auditScope === 'RACK' && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-400">Target Rack</label>
+                <select
+                  value={targetRack}
+                  onChange={(e) => setTargetRack(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none bg-slate-900 border border-white/08 focus:border-indigo-500/50"
+                >
+                  <option value="Rack A1">Rack A1</option>
+                  <option value="Rack A2">Rack A2</option>
+                  <option value="Rack A3">Rack A3</option>
+                  <option value="Rack B1">Rack B1</option>
+                  <option value="Rack B2">Rack B2</option>
+                  <option value="Rack C1">Rack C1</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Conditional Scope Details */}
+          {auditScope === 'FULL' && (
+            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/[0.04] p-3 text-xs text-slate-400">
+              This will compile a complete audit route covering all active warehouse zones and racks. Estimated target: 300 bins.
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-400">Assign Robot</label>
+              <select
+                value={assignedRobotId}
+                onChange={(e) => setAssignedRobotId(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none bg-slate-900 border border-white/08 focus:border-indigo-500/50"
+              >
+                {MOCK_ROBOTS.map(robot => (
+                  <option key={robot.id} value={robot.id}>{robot.name} ({robot.status})</option>
+                ))}
               </select>
             </div>
             
@@ -178,6 +319,7 @@ export default function MissionControl() {
                 <option value="LOW">Low</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="HIGH">High</option>
+                <option value="CRITICAL">Critical</option>
               </select>
             </div>
           </div>
