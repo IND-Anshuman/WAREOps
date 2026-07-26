@@ -23,6 +23,7 @@ import SupervisorDashboard from './pages/supervisor/SupervisorDashboard';
 import AlertCenter from './pages/supervisor/AlertCenter';
 import MissionControl from './pages/supervisor/MissionControl';
 import TeamMonitor from './pages/supervisor/TeamMonitor';
+import InventoryManagement from './pages/supervisor/InventoryManagement';
 
 // Manager Pages
 import ExecutiveDashboard from './pages/manager/ExecutiveDashboard';
@@ -142,6 +143,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['WAREHOUSE_SUPERVISOR']}>
                 <AlertCenter />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="supervisor/inventory"
+            element={
+              <ProtectedRoute allowedRoles={['WAREHOUSE_SUPERVISOR']}>
+                <InventoryManagement />
               </ProtectedRoute>
             }
           />
