@@ -81,6 +81,8 @@ export interface Mission {
   completed_at?: string;
   eta_minutes?: number;
   created_at: string;
+  audit_scope?: 'FULL' | 'ZONE' | 'AISLE' | 'RACK';
+  target_scope_id?: string;
 }
 
 export interface Robot {
