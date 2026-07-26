@@ -1,8 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from app.models.topology import Warehouse, Zone, Aisle, Rack, Shelf, Bin
-from app.schemas.topology import WarehouseCreate, ZoneCreate, AisleCreate, RackCreate, ShelfCreate, BinCreate
+from typing import Optional
+from app.models.topology import Warehouse, Zone, Aisle, Rack, Shelf, Bin, Product
+from app.schemas.topology import WarehouseCreate, ZoneCreate, AisleCreate, RackCreate, ShelfCreate, BinCreate, ProductCreate
 from decimal import Decimal
 import math
 
@@ -170,3 +171,112 @@ class TopologyRepository:
                             coord_z=shelf.height_from_floor_cm,
                             qr_code=f"BIN-A{a_idx}-R{r_idx}-S{s_idx}-B{b_idx}"
                         ))
+
+    async def get_products(self):
+        from sqlalchemy import text
+        query = text("""
+            SELECT p.*, b.code as location 
+            FROM products p
+            LEFT JOIN inventory i ON p.sku = i.sku
+            LEFT JOIN bins b ON i.bin_id = b.id
+            WHERE p.is_active = true
+        """)
+        result = await self.session.execute(query)
+        products = []
+        for row in result.mappings():
+            p = Product(
+                sku=row['sku'],
+                name=row['name'],
+                description=row['description'],
+                category=row['category'],
+                brand=row['brand'],
+                unit_of_measure=row['unit_of_measure'],
+                weight_kg=row['weight_kg'],
+                length_cm=row['length_cm'],
+                width_cm=row['width_cm'],
+                height_cm=row['height_cm'],
+                barcode_value=row['barcode_value'],
+                is_active=row['is_active'],
+                created_at=row['created_at'],
+                updated_at=row['updated_at']
+            )
+            p.location = row['location']
+            products.append(p)
+        return products
+
+    async def get_product_by_sku(self, sku: str):
+        from sqlalchemy import text
+        query = text("""
+            SELECT p.*, b.code as location 
+            FROM products p
+            LEFT JOIN inventory i ON p.sku = i.sku
+            LEFT JOIN bins b ON i.bin_id = b.id
+            WHERE p.sku = :sku
+        """)
+        result = await self.session.execute(query, {"sku": sku})
+        row = result.mappings().first()
+        if not row:
+            return None
+        p = Product(
+            sku=row['sku'],
+            name=row['name'],
+            description=row['description'],
+            category=row['category'],
+            brand=row['brand'],
+            unit_of_measure=row['unit_of_measure'],
+            weight_kg=row['weight_kg'],
+            length_cm=row['length_cm'],
+            width_cm=row['width_cm'],
+            height_cm=row['height_cm'],
+            barcode_value=row['barcode_value'],
+            is_active=row['is_active'],
+            created_at=row['created_at'],
+            updated_at=row['updated_at']
+        )
+        p.location = row['location']
+        return p
+
+    async def create_product(self, data: ProductCreate) -> Product:
+        from sqlalchemy import text
+        location = data.location
+        fields = data.model_dump(exclude={"location"})
+        product = Product(**fields)
+        self.session.add(product)
+        await self.session.commit()
+        await self.session.refresh(product)
+
+        if location:
+            bin_obj = await self.get_bin_by_code(location)
+            if bin_obj:
+                await self.session.execute(
+                    text("INSERT INTO inventory (bin_id, sku, expected_qty) VALUES (:bin_id, :sku, 1) ON CONFLICT (bin_id, sku) DO NOTHING"),
+                    {"bin_id": bin_obj.id, "sku": product.sku}
+                )
+                await self.session.commit()
+                product.location = location
+
+        return product
+
+    async def delete_product_by_sku(self, sku: str) -> bool:
+        from sqlalchemy import text
+        await self.session.execute(
+            text("DELETE FROM inventory WHERE sku = :sku"), {"sku": sku}
+        )
+        await self.session.execute(
+            text("DELETE FROM products WHERE sku = :sku"), {"sku": sku}
+        )
+        await self.session.commit()
+        return True
+
+    async def delete_products_bulk(self, skus: list[str]) -> bool:
+        from sqlalchemy import text
+        if not skus:
+            return True
+        await self.session.execute(
+            text("DELETE FROM inventory WHERE sku = ANY(:skus)"), {"skus": skus}
+        )
+        await self.session.execute(
+            text("DELETE FROM products WHERE sku = ANY(:skus)"), {"skus": skus}
+        )
+        await self.session.commit()
+        return True
