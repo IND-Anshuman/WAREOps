@@ -151,3 +151,30 @@ class ZoneDetail(ZoneResponse):
 
 class WarehouseDetail(WarehouseResponse):
     zones: List[ZoneDetail] = []
+
+# --- Product ---
+class ProductBase(BaseModel):
+    sku: str = Field(..., max_length=100)
+    name: str = Field(..., max_length=500)
+    description: Optional[str] = None
+    category: Optional[str] = None
+    brand: Optional[str] = None
+    weight_kg: Optional[Decimal] = None
+    length_cm: Optional[Decimal] = None
+    width_cm: Optional[Decimal] = None
+    height_cm: Optional[Decimal] = None
+    is_active: bool = True
+    location: Optional[str] = None
+
+class ProductCreate(ProductBase):
+    pass
+
+class ProductResponse(ProductBase):
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class BulkDeleteRequest(BaseModel):
+    skus: List[str]
