@@ -102,3 +102,20 @@ class Bin(Base):
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     shelf = relationship("Shelf", back_populates="bins")
+
+class Product(Base):
+    __tablename__ = 'products'
+    sku = Column(String(100), primary_key=True)
+    name = Column(String(500), nullable=False)
+    description = Column(String)
+    category = Column(String(100))
+    brand = Column(String(200))
+    unit_of_measure = Column(String(50), default='EACH')
+    weight_kg = Column(Numeric(10, 4))
+    length_cm = Column(Numeric(8, 2))
+    width_cm = Column(Numeric(8, 2))
+    height_cm = Column(Numeric(8, 2))
+    barcode_value = Column(String(255))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
