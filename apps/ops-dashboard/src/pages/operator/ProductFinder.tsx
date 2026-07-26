@@ -3,15 +3,7 @@ import { Search, MapPin, CheckCircle, RefreshCw, X } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-
-// Mock inventory list for operator searching
-const MOCK_INVENTORY_ITEMS = [
-  { sku: 'SKU-ELEC-001', name: 'Intel Core i9 Processor', category: 'Electronics', location: 'A1-R2-S3-B1', status: 'VERIFIED', lastScanned: '2 hours ago', confidence: 98 },
-  { sku: 'SKU-ELEC-002', name: 'Samsung 4K Monitor 27"', category: 'Electronics', location: 'A1-R1-S2-B2', status: 'VERIFIED', lastScanned: '4 hours ago', confidence: 96 },
-  { sku: 'SKU-FURN-001', name: 'Ergonomic Office Chair', category: 'Furniture', location: 'A2-R3-S1-B1', status: 'VERIFIED', lastScanned: '1 day ago', confidence: 92 },
-  { sku: 'SKU-FURN-002', name: 'Standing Desk 180cm', category: 'Furniture', location: 'A2-R1-S3-B2', status: 'MISMATCH', lastScanned: '10 min ago', confidence: 67 },
-  { sku: 'SKU-BOOK-001', name: 'Clean Code - Robert Martin', category: 'Books', location: 'A3-R4-S1-B2', status: 'MISSING', lastScanned: '1 hour ago', confidence: 88 },
-];
+import { MOCK_INVENTORY_ITEMS } from '../../api/mockData';
 
 export default function ProductFinder() {
   const [searchQuery, setSearchQuery] = useState('');
