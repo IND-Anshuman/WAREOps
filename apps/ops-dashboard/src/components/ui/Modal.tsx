@@ -32,7 +32,7 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
         {/* Panel */}
         <Dialog.Content
           className={clsx(
-            'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full p-6 rounded-2xl outline-none',
+            'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-h-[90vh] overflow-y-auto p-6 rounded-2xl outline-none',
             'glass-elevated',
             sizeClasses[size],
             className
