@@ -14,7 +14,7 @@ interface TableProps<T> {
   columns?: Column<T>[];
   data?: T[];
   rowKey?: (row: T) => string;
-  headers?: string[];
+  headers?: React.ReactNode[];
   rows?: React.ReactNode[][];
   loading?: boolean;
   emptyMessage?: string;
