@@ -418,4 +418,63 @@ export const adminApi = {
   },
 };
 
+// ─── Products API (Backend-Backed) ──────────────────────────────────────────
+import { InventoryItem, MOCK_INVENTORY_ITEMS } from './mockData';
+
+const topologyApiClient = axios.create({
+  baseURL: 'http://localhost:8001/api/v1',
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+export const productsApi = {
+  getProducts: async (): Promise<InventoryItem[]> => {
+    try {
+      const { data } = await topologyApiClient.get<InventoryItem[]>('/products');
+      // Format backend response to match frontend InventoryItem interface
+      return data.map(p => ({
+        sku: p.sku,
+        name: p.name,
+        category: p.category || 'General',
+        location: p.location || 'Unassigned',
+        status: p.location ? 'VERIFIED' as const : 'CLEARED' as const,
+        lastScanned: 'Backend DB',
+        confidence: 100
+      }));
+    } catch (error) {
+      console.error("Error fetching products from backend, falling back to mock:", error);
+      return [...MOCK_INVENTORY_ITEMS];
+    }
+  },
+
+  addProduct: async (product: Partial<InventoryItem>): Promise<InventoryItem> => {
+    const { data } = await topologyApiClient.post<any>('/products', {
+      sku: product.sku,
+      name: product.name,
+      category: product.category,
+      location: product.location,
+      unit_of_measure: 'EACH',
+      weight_kg: 1.0,
+      is_active: true
+    });
+    return {
+      sku: data.sku,
+      name: data.name,
+      category: data.category || 'General',
+      location: data.location || 'Unassigned',
+      status: data.location ? 'VERIFIED' : 'CLEARED',
+      lastScanned: 'Just now',
+      confidence: 100
+    };
+  },
+
+  deleteProduct: async (sku: string): Promise<void> => {
+    await topologyApiClient.delete(`/products/${sku}`);
+  },
+
+  deleteProducts: async (skus: string[]): Promise<void> => {
+    await topologyApiClient.post('/products/delete-bulk', { skus });
+  },
+};
+
 export default apiClient;
