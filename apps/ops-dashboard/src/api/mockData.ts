@@ -222,6 +222,8 @@ export const MOCK_MISSIONS: Mission[] = [
     started_at: new Date(Date.now() - 1000 * 60 * 42).toISOString(),
     eta_minutes: 19,
     created_at: new Date(Date.now() - 1000 * 60 * 50).toISOString(),
+    audit_scope: 'ZONE',
+    target_scope_id: 'Zone A',
   },
   {
     id: 'mission-002',
@@ -237,6 +239,8 @@ export const MOCK_MISSIONS: Mission[] = [
     started_at: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
     eta_minutes: 38,
     created_at: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
+    audit_scope: 'ZONE',
+    target_scope_id: 'Zone B',
   },
   {
     id: 'mission-003',
@@ -248,6 +252,8 @@ export const MOCK_MISSIONS: Mission[] = [
     bins_scanned: 0,
     bins_total: 45,
     created_at: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+    audit_scope: 'RACK',
+    target_scope_id: 'Rack A1',
   },
   {
     id: 'mission-004',
@@ -263,6 +269,8 @@ export const MOCK_MISSIONS: Mission[] = [
     started_at: new Date(Date.now() - 1000 * 60 * 60 * 10).toISOString(),
     completed_at: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
     created_at: new Date(Date.now() - 1000 * 60 * 60 * 11).toISOString(),
+    audit_scope: 'ZONE',
+    target_scope_id: 'Zone C',
   },
   {
     id: 'mission-005',
@@ -274,6 +282,8 @@ export const MOCK_MISSIONS: Mission[] = [
     bins_scanned: 0,
     bins_total: 80,
     created_at: new Date().toISOString(),
+    audit_scope: 'FULL',
+    target_scope_id: 'All',
   },
 ];
 
@@ -427,4 +437,23 @@ export const MOCK_TEAM = [
     pending_tasks: 0,
     avg_response_time_min: 7,
   },
+];
+
+// ─── Shared Inventory Items Database ──────────────────────────────────────────
+export interface InventoryItem {
+  sku: string;
+  name: string;
+  category: string;
+  location: string;
+  status: 'VERIFIED' | 'MISMATCH' | 'MISSING' | 'CLEARED';
+  lastScanned: string;
+  confidence: number;
+}
+
+export let MOCK_INVENTORY_ITEMS: InventoryItem[] = [
+  { sku: 'SKU-ELEC-001', name: 'Intel Core i9 Processor', category: 'Electronics', location: 'A1-R2-S3-B1', status: 'VERIFIED', lastScanned: '2 hours ago', confidence: 98 },
+  { sku: 'SKU-ELEC-002', name: 'Samsung 4K Monitor 27"', category: 'Electronics', location: 'A1-R1-S2-B2', status: 'VERIFIED', lastScanned: '4 hours ago', confidence: 96 },
+  { sku: 'SKU-FURN-001', name: 'Ergonomic Office Chair', category: 'Furniture', location: 'A2-R3-S1-B1', status: 'VERIFIED', lastScanned: '1 day ago', confidence: 92 },
+  { sku: 'SKU-FURN-002', name: 'Standing Desk 180cm', category: 'Furniture', location: 'A2-R1-S3-B2', status: 'MISMATCH', lastScanned: '10 min ago', confidence: 67 },
+  { sku: 'SKU-BOOK-001', name: 'Clean Code - Robert Martin', category: 'Books', location: 'A3-R4-S1-B2', status: 'MISSING', lastScanned: '1 hour ago', confidence: 88 },
 ];
