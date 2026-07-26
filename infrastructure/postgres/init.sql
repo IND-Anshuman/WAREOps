@@ -252,15 +252,7 @@ CREATE TABLE observations (
     processing_error TEXT,
     metadata        JSONB DEFAULT '{}',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-) PARTITION BY RANGE (observed_at);
-
--- Create initial partitions (monthly)
-CREATE TABLE observations_2026_07 PARTITION OF observations
-    FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
-CREATE TABLE observations_2026_08 PARTITION OF observations
-    FOR VALUES FROM ('2026-08-01') TO ('2026-09-01');
-CREATE TABLE observations_2026_09 PARTITION OF observations
-    FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
+);
 
 -- ─────────────────────────────────────────────
 -- RECONCILIATION & ALERTS DOMAIN
