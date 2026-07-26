@@ -41,6 +41,8 @@ class Mission(Base):
     total_bins_target = Column(Integer, default=0)
     total_bins_scanned = Column(Integer, default=0)
     coverage_pct = Column(Numeric(5, 2), default=0.00)
+    audit_scope = Column(String(50), default='ZONE') # FULL, ZONE, AISLE, RACK
+    target_scope_id = Column(String(100)) # e.g. Zone A, Aisle 3, Rack A2, etc.
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
