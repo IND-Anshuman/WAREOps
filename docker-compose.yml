@@ -163,6 +163,31 @@ services:
   # APPLICATION SERVICES
   # ─────────────────────────────────────────────
 
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: wh-auth-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://warehouse_admin:warehouse_secret@postgres:5432/warehouse_platform
+      REDIS_URL: redis://:redis_secret@redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SERVICE_NAME: auth-service
+      LOG_LEVEL: INFO
+      PORT: 8000
+      SECRET_KEY: super-secret-key-for-wareops-auth-service-jwt-tokens-12345
+      FRONTEND_URL: http://localhost:5173
+    ports:
+      - "8000:8000"
+    networks:
+      - warehouse-net
+    restart: unless-stopped
+
   topology-service:
     build:
       context: ./services/topology-service
@@ -308,6 +333,25 @@ services:
       PORT: 8006
     ports:
       - "8006:8006"
+    networks:
+      - warehouse-net
+    restart: unless-stopped
+
+  api-gateway:
+    image: nginx:alpine
+    container_name: wh-api-gateway
+    depends_on:
+      - auth-service
+      - topology-service
+      - mission-service
+      - observation-service
+      - reconciliation-service
+      - alerting-service
+      - digital-twin-sync
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - warehouse-net
     restart: unless-stopped
