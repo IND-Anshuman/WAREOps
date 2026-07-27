@@ -5,8 +5,9 @@ import {
 } from 'recharts';
 import {
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle2,
-  Clock, Zap, Bot, Activity, Shield, Package
+  Clock, Zap, Bot, Activity, Shield, Package, Download
 } from 'lucide-react';
+import { exportToCsv } from '../../utils/exportCsv';
 
 // ─── Mock Data ─────────────────────────────────────────────────────────────────
 const accuracyTrend = Array.from({ length: 14 }, (_, i) => ({
@@ -237,18 +238,35 @@ export default function ExecutiveDashboard() {
   return (
     <div className="min-h-screen bg-[#080c14] p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-indigo-400 mb-1">Manager Dashboard</p>
           <h1 className="text-2xl font-bold text-slate-100">Executive Overview</h1>
           <p className="text-sm text-slate-500 mt-1">Warehouse WH-ALPHA-001 · Last updated just now</p>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-4 py-2">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          <span className="text-xs font-semibold text-emerald-400">Live Monitoring</span>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              const headers = ['Metric', 'Current Value', 'Status Target'];
+              const rows = [
+                ['Warehouse Health Score', `${healthScore}%`, 'Target: >95%'],
+                ['Reconciliation Accuracy', '99.4%', 'Target: >99.0%'],
+                ['Active AMR Fleet', '4 Active / 2 Charging / 1 Offline', '7 Total'],
+                ['Open Alerts', '15 Open Alerts', '3 Critical'],
+              ];
+              exportToCsv('executive_dashboard_summary', headers, rows);
+            }}
+            className="flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-all shadow-lg shadow-indigo-500/20"
+          >
+            <Download className="h-4 w-4" /> Export Summary
+          </button>
+          <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-4 py-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            <span className="text-xs font-semibold text-emerald-400 font-mono">LIVE FEED ACTIVE</span>
+          </div>
         </div>
       </div>
 
