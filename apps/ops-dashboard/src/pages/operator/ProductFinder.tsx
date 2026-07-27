@@ -1,16 +1,35 @@
-import React, { useState, useMemo } from 'react';
-import { Search, MapPin, CheckCircle, RefreshCw, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, MapPin, CheckCircle, RefreshCw, X, Download } from 'lucide-react';
+import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { MOCK_INVENTORY_ITEMS } from '../../api/mockData';
+import { productsApi } from '../../api/client';
+import type { InventoryItem } from '../../api/mockData';
 
 export default function ProductFinder() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  
+  const [products, setProducts] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const data = await productsApi.getProducts();
+        setProducts(data);
+      } catch (err) {
+        console.error('Failed to fetch products:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProducts();
+  }, []);
 
   const filteredItems = useMemo(() => {
-    return MOCK_INVENTORY_ITEMS.filter(item => {
+    return products.filter(item => {
       const matchesQuery = item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            item.location.toLowerCase().includes(searchQuery.toLowerCase());
@@ -19,14 +38,30 @@ export default function ProductFinder() {
       
       return matchesQuery && matchesCategory;
     });
-  }, [searchQuery, selectedCategory]);
+  }, [products, searchQuery, selectedCategory]);
+
+  if (loading) return <div className="p-12 text-center text-slate-400">Loading...</div>;
+
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-100">Product Finder</h1>
-        <p className="text-sm text-slate-400">Search products by SKU, name, or location to locate them on the map.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100">Product Finder</h1>
+          <p className="text-sm text-slate-400">Search products by SKU, name, or location to locate them on the map.</p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            const headers = ['SKU', 'Product Name', 'Category', 'Location', 'Status', 'Confidence %'];
+            const rows = filteredItems.map(i => [i.sku, i.name, i.category, i.location, i.status, i.confidence]);
+            exportToCsv('product_finder_results', headers, rows);
+          }}
+          className="flex items-center gap-1.5 text-xs py-2 px-3 self-start sm:self-auto"
+        >
+          <Download className="h-4 w-4" /> Export CSV
+        </Button>
       </div>
 
       {/* Search and Filters */}
