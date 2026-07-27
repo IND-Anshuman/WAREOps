@@ -2,10 +2,10 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 
-// Layout
+// Layout & Auth Pages
 import { Layout } from './components/layout/Layout';
-
-// Auth Pages
+import OnboardingPage from './pages/OnboardingPage';
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/auth/LoginPage';
 import MFAPage from './pages/auth/MFAPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -63,7 +63,7 @@ function RoleDefaultRedirect() {
   const { isAuthenticated, user } = useAuthStore();
 
   if (!isAuthenticated || !user) {
-    return <Navigate to="/auth/login" replace />;
+    return <OnboardingPage />;
   }
 
   switch (user.role) {
@@ -76,7 +76,7 @@ function RoleDefaultRedirect() {
     case 'WAREHOUSE_OPERATOR':
       return <Navigate to="/operator/dashboard" replace />;
     default:
-      return <Navigate to="/auth/login" replace />;
+      return <OnboardingPage />;
   }
 }
 
@@ -84,7 +84,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public/Auth Routes */}
+        {/* Public/Auth/Landing Routes */}
+        <Route path="/landing" element={<OnboardingPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/dashboard-preview" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/login" element={<LoginPage />} />
         <Route path="/auth/mfa" element={<MFAPage />} />
         <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
