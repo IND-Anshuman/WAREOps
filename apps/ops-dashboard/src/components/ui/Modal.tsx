@@ -10,6 +10,7 @@ interface ModalProps {
   description?: string;
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  position?: 'center' | 'top-center';
   className?: string;
 }
 
@@ -20,19 +21,20 @@ const sizeClasses = {
   xl: 'max-w-2xl',
 };
 
-export function Modal({ open, onClose, title, description, children, size = 'md', className }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, size = 'md', position = 'top-center', className }: ModalProps) {
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         {/* Backdrop */}
         <Dialog.Overlay
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-md"
           style={{ animation: 'fade-in 0.2s ease both' }}
         />
         {/* Panel */}
         <Dialog.Content
           className={clsx(
-            'fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-h-[90vh] overflow-y-auto p-6 rounded-2xl outline-none',
+            'fixed left-1/2 z-50 -translate-x-1/2 w-full max-h-[85vh] overflow-y-auto p-6 rounded-2xl outline-none shadow-2xl border border-white/10',
+            position === 'top-center' ? 'top-[8vh]' : 'top-1/2 -translate-y-1/2',
             'glass-elevated',
             sizeClasses[size],
             className
