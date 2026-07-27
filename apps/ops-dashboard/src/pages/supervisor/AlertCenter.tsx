@@ -1,16 +1,34 @@
-import React, { useState, useMemo } from 'react';
-import { AlertTriangle, Filter, CheckCircle2, User, RefreshCw, X, Eye } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { AlertTriangle, Filter, CheckCircle2, User, RefreshCw, X, Eye, Download } from 'lucide-react';
+import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { MOCK_ALERTS } from '../../api/mockData';
+import { alertsApi } from '../../api/client';
+import type { Alert } from '../../types';
 
 export default function AlertCenter() {
-  const [alerts, setAlerts] = useState(MOCK_ALERTS);
-  const [selectedAlert, setSelectedAlert] = useState<any>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [notes, setNotes] = useState('');
+
+  const fetchAlerts = async () => {
+    try {
+      const data = await alertsApi.getAlerts();
+      setAlerts(data);
+    } catch (err) {
+      console.error('Failed to fetch alerts:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAlerts();
+  }, []);
 
   const filteredAlerts = useMemo(() => {
     return alerts.filter(a => {
@@ -20,40 +38,55 @@ export default function AlertCenter() {
     });
   }, [alerts, severityFilter, statusFilter]);
 
-  const handleResolve = (e: React.FormEvent) => {
+  const handleResolve = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAlert) return;
 
-    setAlerts(prev => prev.map(a => {
-      if (a.id === selectedAlert.id) {
-        return { ...a, status: 'RESOLVED', resolution_notes: notes };
-      }
-      return a;
-    }));
-    
-    alert(`Alert ${selectedAlert.id} marked as RESOLVED.`);
-    setSelectedAlert(null);
-    setNotes('');
-  };
-
-  const handleAcknowledge = (id: string) => {
-    setAlerts(prev => prev.map(a => {
-      if (a.id === id) {
-        return { ...a, status: 'ACKNOWLEDGED' };
-      }
-      return a;
-    }));
-    if (selectedAlert?.id === id) {
-      setSelectedAlert((prev: any) => ({ ...prev, status: 'ACKNOWLEDGED' }));
+    try {
+      const updated = await alertsApi.resolveAlert(selectedAlert.id, notes);
+      setAlerts(prev => prev.map(a => a.id === updated.id ? updated : a));
+      alert(`Alert ${selectedAlert.id} marked as RESOLVED.`);
+      setSelectedAlert(null);
+      setNotes('');
+    } catch (err) {
+      console.error('Failed to resolve alert:', err);
     }
   };
+
+  const handleAcknowledge = async (id: string) => {
+    try {
+      const updated = await alertsApi.acknowledgeAlert(id);
+      setAlerts(prev => prev.map(a => a.id === updated.id ? updated : a));
+      if (selectedAlert?.id === id) {
+        setSelectedAlert(updated);
+      }
+    } catch (err) {
+      console.error('Failed to acknowledge alert:', err);
+    }
+  };
+
+  if (loading) return <div className="p-12 text-center text-slate-400">Loading...</div>;
+
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-100">Alert Triage Desk</h1>
-        <p className="text-sm text-slate-400">Reconcile discrepancies, manage critical failures, and assign audits to floor staff.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100">Alert Triage Desk</h1>
+          <p className="text-sm text-slate-400">Reconcile discrepancies, manage critical failures, and assign audits to floor staff.</p>
+        </div>
+        <Button
+          variant="primary"
+          onClick={() => {
+            const headers = ['Alert ID', 'Type', 'Severity', 'Status', 'Bin Code', 'Title', 'Description', 'Created At'];
+            const rows = filteredAlerts.map(a => [a.id, a.type, a.severity, a.status, a.bin_code, a.title, a.description, a.created_at]);
+            exportToCsv('alert_triage_export', headers, rows);
+          }}
+          className="bg-indigo-600 hover:bg-indigo-500 text-xs py-2.5 px-4 flex items-center gap-2 self-start sm:self-auto"
+        >
+          <Download className="h-4 w-4" /> Export Alerts CSV
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
