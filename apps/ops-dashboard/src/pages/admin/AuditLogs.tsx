@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Download, ChevronLeft, ChevronRight, Filter, X } from 'lucide-react';
+import { exportToCsv } from '../../utils/exportCsv';
 
 // ─── Mock Data ─────────────────────────────────────────────────────────────────
 const generateLogs = () => {
@@ -97,7 +98,16 @@ const ExportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </div>
         <div className="flex items-center justify-end gap-3 border-t border-white/[0.06] p-6">
           <button onClick={onClose} className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
-          <button className="flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors shadow-lg shadow-indigo-500/20">
+          <button 
+            onClick={() => {
+              const sampleLogs = generateLogs();
+              const headers = ['ID', 'Actor Email', 'Action', 'Target Resource', 'Timestamp', 'Outcome'];
+              const rows = sampleLogs.map((l: any) => [l.id, l.actor, l.action, l.resource, l.time, l.outcome]);
+              exportToCsv('compliance_audit_logs', headers, rows);
+              onClose();
+            }}
+            className="flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors shadow-lg shadow-indigo-500/20"
+          >
             <Download className="h-4 w-4" /> Generate Package
           </button>
         </div>
