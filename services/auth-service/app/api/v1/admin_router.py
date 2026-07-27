@@ -23,6 +23,7 @@ from app.schemas.auth import (
     AuditLogResponse,
     InviteCreateRequest,
     InviteResponse,
+    MessageResponse,
     OrganizationResponse,
     OrganizationSettingsUpdate,
     RoleResponse,
@@ -159,9 +160,9 @@ async def update_user(
 async def update_user_role(
     user_id: uuid.UUID,
     role_id: uuid.UUID,
-    warehouse_id: Optional[uuid.UUID] = None,
-    db: Annotated[AsyncSession, Depends(get_db)] = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: UserContext = Depends(require_permission("users", "write")),
+    warehouse_id: Optional[uuid.UUID] = None,
 ):
     """Change the role of a user, potentially restricted to a specific warehouse."""
     repo = AuthRepository(db)
