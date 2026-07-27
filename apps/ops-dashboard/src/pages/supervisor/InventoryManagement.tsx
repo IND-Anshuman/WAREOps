@@ -2,8 +2,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, Trash2, Plus, CheckCircle2, MapPin, 
   RefreshCw, Camera, AlertCircle, Sparkles, Barcode, Trash,
-  ArrowDownLeft, ArrowUpRight, ShieldCheck, Loader2
+  ArrowDownLeft, ArrowUpRight, ShieldCheck, Loader2, Download
 } from 'lucide-react';
+import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -178,21 +179,35 @@ export default function InventoryManagement() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 rounded-xl bg-white/[0.03] border border-white/[0.06] p-1 w-fit">
-        <button
-          onClick={() => setActiveTab('catalog')}
-          className={`px-5 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300
-            ${activeTab === 'catalog' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex gap-1 rounded-xl bg-white/[0.03] border border-white/[0.06] p-1 w-fit">
+          <button
+            onClick={() => setActiveTab('catalog')}
+            className={`px-5 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300
+              ${activeTab === 'catalog' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            Product Catalog ({catalogItems.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('scanner')}
+            className={`px-5 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300 flex items-center gap-1.5
+              ${activeTab === 'scanner' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            <Camera className="h-3.5 w-3.5" /> Inbound/Outbound QR Scanner
+          </button>
+        </div>
+
+        <Button
+          variant="secondary"
+          onClick={() => {
+            const headers = ['SKU', 'Name', 'Category', 'Location', 'Status', 'Confidence'];
+            const rows = filteredItems.map(i => [i.sku, i.name, i.category, i.location, i.status, i.confidence]);
+            exportToCsv('inventory_catalog_export', headers, rows);
+          }}
+          className="flex items-center gap-1.5 text-xs py-2 px-3 self-start sm:self-auto"
         >
-          Product Catalog ({catalogItems.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('scanner')}
-          className={`px-5 py-2.5 rounded-lg text-xs font-semibold transition-all duration-300 flex items-center gap-1.5
-            ${activeTab === 'scanner' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300'}`}
-        >
-          <Camera className="h-3.5 w-3.5" /> Inbound/Outbound QR Scanner
-        </button>
+          <Download className="h-3.5 w-3.5" /> Export Catalog CSV
+        </Button>
       </div>
 
       {/* TAB 1: Catalog view with deletion */}
