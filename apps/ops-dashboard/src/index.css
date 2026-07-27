@@ -96,10 +96,21 @@ body {
   .btn-icon:hover { background: rgba(255,255,255,0.09); }
   .btn-sm { @apply text-xs px-3 py-1.5 rounded-lg; }
 
-  .input { @apply w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none; background: rgba(255,255,255,0.04); border: 1px solid var(--border-glass-md); transition: all var(--duration-base) var(--ease-out); caret-color: var(--indigo); }
+  .input { @apply w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none; background: #0e1424; border: 1px solid var(--border-glass-md); transition: all var(--duration-base) var(--ease-out); caret-color: var(--indigo); }
   .input::placeholder { color: var(--text-muted); }
-  .input:focus { background: rgba(99,102,241,0.06); border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(99,102,241,0.12); }
+  .input:focus { background: #12192e; border-color: var(--indigo); box-shadow: 0 0 0 3px rgba(99,102,241,0.18); }
   .input-error { border-color: var(--danger) !important; }
+
+  /* Fix browser autofill white background override */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #0e1424 inset !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+    caret-color: #f1f5f9 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+  }
 
   .nav-item { @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium cursor-pointer select-none; color: var(--text-muted); transition: all var(--duration-base) var(--ease-out); }
   .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
