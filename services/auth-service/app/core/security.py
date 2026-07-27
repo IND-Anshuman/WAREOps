@@ -25,25 +25,21 @@ from app.config import settings
 
 log = structlog.get_logger(__name__)
 
-# ── Bcrypt context ─────────────────────────────────────────────────────────────
-_pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=12,
-)
-
+import bcrypt
 
 # ── Password utilities ─────────────────────────────────────────────────────────
 
 def hash_password(plain: str) -> str:
     """Hash a plaintext password using bcrypt (cost factor 12)."""
-    return _pwd_context.hash(plain)
+    pwd_bytes = plain.encode("utf-8")
+    salt = bcrypt.gensalt(rounds=12)
+    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Verify a plaintext password against a bcrypt hash."""
     try:
-        return _pwd_context.verify(plain, hashed)
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
     except Exception:
         return False
 
