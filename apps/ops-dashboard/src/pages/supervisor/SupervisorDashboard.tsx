@@ -4,14 +4,37 @@ import { AlertTriangle, Compass, Users, Clock, ArrowRight, Play, Eye } from 'luc
 import { Card } from '../../components/ui/Card';
 import { StatCard } from '../../components/ui/StatCard';
 import { Table } from '../../components/ui/Table';
-import { MOCK_ALERTS, MOCK_MISSIONS } from '../../api/mockData';
+import { useState, useEffect } from 'react';
+import { alertsApi, missionsApi } from '../../api/client';
+import type { Alert, Mission } from '../../types';
 
 export default function SupervisorDashboard() {
   const navigate = useNavigate();
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Compute stat metrics from mock data
-  const openAlerts = MOCK_ALERTS.filter(a => a.status === 'OPEN').length;
-  const activeMissions = MOCK_MISSIONS.filter(m => m.status === 'IN_PROGRESS').length;
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        const [aList, mList] = await Promise.all([
+          alertsApi.getAlerts().catch(() => []),
+          missionsApi.getMissions().catch(() => []),
+        ]);
+        setAlerts(aList);
+        setMissions(mList);
+      } catch (err) {
+        console.error('Failed to load supervisor dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDashboardData();
+  }, []);
+
+  const openAlerts = alerts.filter(a => a.status === 'OPEN').length;
+  const activeMissions = missions.filter(m => m.status === 'IN_PROGRESS').length;
   const onlineOperators = 3;
   const avgResponseTime = '28 min';
 
@@ -69,7 +92,7 @@ export default function SupervisorDashboard() {
           <Card className="p-0 overflow-hidden">
             <Table
               headers={['Mission Name', 'Progress', 'Bins Scanned', 'Status']}
-              rows={MOCK_MISSIONS.slice(0, 3).map(m => [
+              rows={missions.slice(0, 3).map(m => [
                 <div key={m.id} className="font-semibold text-slate-200">{m.name}</div>,
                 <div key={m.id} className="w-full max-w-[150px] flex items-center gap-3">
                   <div className="w-full bg-white/06 rounded-full h-1.5 overflow-hidden">
@@ -146,7 +169,7 @@ export default function SupervisorDashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {MOCK_ALERTS.slice(0, 2).map(alert => (
+          {alerts.slice(0, 2).map(alert => (
             <Card key={alert.id} className="border-red-500/20 bg-red-500/02 flex justify-between items-start gap-4">
               <div className="space-y-2">
                 <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider">
