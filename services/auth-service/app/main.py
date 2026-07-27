@@ -6,7 +6,7 @@ from __future__ import annotations
 import contextlib
 import uvicorn
 import structlog
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -14,6 +14,7 @@ import redis.asyncio as aioredis
 
 from app.config import settings
 from app.database import engine, Base
+from app.seed import seed_initial_data
 from app.api.v1.auth_router import router as auth_router
 from app.api.v1.admin_router import router as admin_router
 
@@ -23,7 +24,7 @@ structlog.configure(
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.format_exc_info,
-        structlog.processors.TimeStamps(fmt="iso"),
+        structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.JSONRenderer(),
     ],
     wrapper_class=structlog.make_filtering_bound_logger(settings.LOG_LEVEL),
@@ -38,6 +39,9 @@ async def lifespan(app: FastAPI):
     log.info("Initializing database tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Seed Initial Auth Data
+    await seed_initial_data()
 
     # Initialize Redis Client Connection
     log.info("Connecting to Redis...", url=settings.REDIS_URL)
