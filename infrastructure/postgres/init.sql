@@ -436,7 +436,33 @@ INSERT INTO products (sku, name, category, unit_of_measure, weight_kg) VALUES
     ('SKU-TOOL-001', 'DeWalt Drill Machine 18V', 'Tools', 'EACH', 2.1),
     ('SKU-TOOL-002', 'Stanley Tape Measure 10m', 'Tools', 'EACH', 0.3),
     ('SKU-CONS-001', 'Laptop Cooling Pad USB', 'Consumer Electronics', 'EACH', 0.5),
-    ('SKU-CONS-002', 'Mechanical Keyboard RGB', 'Consumer Electronics', 'EACH', 0.9);
+    ('SKU-CONS-002', 'Mechanical Keyboard RGB', 'Consumer Electronics', 'EACH', 0.9),
+    ('SKU-ELEC-005', 'Sony PlayStation 5 Slim', 'Electronics', 'EACH', 3.9),
+    ('SKU-TOY-101', 'LEGO Star Wars Millennium Falcon', 'Toys', 'EACH', 4.2),
+    ('SKU-MED-050', 'Premium First Aid Kit', 'Medical', 'EACH', 1.2);
+
+-- Demo Users for All 4 Roles
+INSERT INTO users (id, email, password_hash, display_name, role, org_id, is_active, mfa_enabled) VALUES
+    ('11111111-1111-1111-1111-111111111111', 'admin@wareops.dev', '$2b$12$KIXx5jY3O6XqG7L2A2cW1.e.aQ0Y3Y1w1u1u1u1u1u1u1u1u1u1u', 'Alex Rivera', 'ENTERPRISE_ADMIN', 'org-001', true, true),
+    ('22222222-2222-2222-2222-222222222222', 'manager@wareops.dev', '$2b$12$KIXx5jY3O6XqG7L2A2cW1.e.aQ0Y3Y1w1u1u1u1u1u1u1u1u1u1u', 'Sarah Chen', 'WAREHOUSE_MANAGER', 'org-001', true, true),
+    ('33333333-3333-3333-3333-333333333333', 'supervisor@wareops.dev', '$2b$12$KIXx5jY3O6XqG7L2A2cW1.e.aQ0Y3Y1w1u1u1u1u1u1u1u1u1u1u', 'Marcus Johnson', 'WAREHOUSE_SUPERVISOR', 'org-001', true, false),
+    ('44444444-4444-4444-4444-444444444444', 'operator@wareops.dev', '$2b$12$KIXx5jY3O6XqG7L2A2cW1.e.aQ0Y3Y1w1u1u1u1u1u1u1u1u1u1u', 'Priya Patel', 'WAREHOUSE_OPERATOR', 'org-001', true, false);
+
+-- Demo Robots
+INSERT INTO robots (id, warehouse_id, code, name, status, battery_level_pct, ip_address) VALUES
+    ('r1111111-1111-1111-1111-111111111111', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-01', 'Titan Alpha', 'ONLINE', 92, '192.168.1.101'),
+    ('r2222222-2222-2222-2222-222222222222', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-02', 'Scout Beta', 'ONLINE', 78, '192.168.1.102'),
+    ('r3333333-3333-3333-3333-333333333333', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-03', 'Ranger Gamma', 'CHARGING', 45, '192.168.1.103');
+
+-- Demo Missions
+INSERT INTO missions (id, warehouse_id, robot_id, name, status, total_target_bins, audited_bins_count) VALUES
+    ('m1111111-1111-1111-1111-111111111111', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'r1111111-1111-1111-1111-111111111111', 'Zone A High-Bay Audit', 'IN_PROGRESS', 50, 36),
+    ('m2222222-2222-2222-2222-222222222222', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'r2222222-2222-2222-2222-222222222222', 'Aisle 3 Spot Check', 'SCHEDULED', 16, 0);
+
+-- Demo Alerts
+INSERT INTO alerts (id, warehouse_id, type, severity, status, title, description) VALUES
+    ('a1111111-1111-1111-1111-111111111111', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'MISPLACED', 'CRITICAL', 'OPEN', 'Critical SKU Mismatch — Bin A1-R2-S3-B1', 'Intel Core i9 expected but Standing Desk SKU found.'),
+    ('a2222222-2222-2222-2222-222222222222', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'MISSING', 'HIGH', 'OPEN', 'Product Missing from Bin B2-R1-S4-B2', 'Samsung 4K Monitor expected but bin appears empty.');
 
 -- Update timestamps trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
