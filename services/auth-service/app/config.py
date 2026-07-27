@@ -20,17 +20,17 @@ class Settings(BaseSettings):
 
     # ── Service identity ──────────────────────────────────────────────────────
     SERVICE_NAME: str = Field(default="auth-service")
-    PORT: int = Field(default=8006)
+    PORT: int = Field(default=8000)
     LOG_LEVEL: str = Field(default="INFO")
     ENVIRONMENT: str = Field(default="development")  # development | staging | production
 
     # ── Database ──────────────────────────────────────────────────────────────
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/auth_db"
+        default="postgresql+asyncpg://warehouse_admin:warehouse_secret@localhost:5432/warehouse_platform"
     )
 
     # ── Redis ─────────────────────────────────────────────────────────────────
-    REDIS_URL: str = Field(default="redis://localhost:6379/0")
+    REDIS_URL: str = Field(default="redis://:redis_secret@localhost:6379/0")
 
     # ── Kafka ─────────────────────────────────────────────────────────────────
     KAFKA_BOOTSTRAP_SERVERS: str = Field(default="localhost:9092")
