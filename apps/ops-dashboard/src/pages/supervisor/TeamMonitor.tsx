@@ -1,8 +1,10 @@
 import React from 'react';
-import { Users, Clock, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Users, Clock, CheckCircle2, ShieldAlert, Download } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { StatCard } from '../../components/ui/StatCard';
 import { Table } from '../../components/ui/Table';
+import { Button } from '../../components/ui/Button';
+import { exportToCsv } from '../../utils/exportCsv';
 
 export default function TeamMonitor() {
   const teamMembers = [
@@ -21,9 +23,22 @@ export default function TeamMonitor() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-100">Team Performance Monitor</h1>
-        <p className="text-sm text-slate-400">Monitor operator SLA compliance, response times, and daily verification volumes.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-100">Team Performance Monitor</h1>
+          <p className="text-sm text-slate-400">Monitor operator SLA compliance, response times, and daily verification volumes.</p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            const headers = ['Task ID', 'Operator Name', 'Activity Description', 'Timestamp', 'SLA Status'];
+            const rows = tasksLog.map(t => [t.id, t.operator, t.activity, t.time, t.sla]);
+            exportToCsv('team_performance_export', headers, rows);
+          }}
+          className="flex items-center gap-1.5 text-xs py-2 px-3 self-start sm:self-auto"
+        >
+          <Download className="h-4 w-4" /> Export CSV
+        </Button>
       </div>
 
       {/* Stats */}
