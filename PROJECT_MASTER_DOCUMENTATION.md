@@ -15,7 +15,7 @@
    - `shared-utils`: Logging, Exceptions, and Schema Standardization
 4. **Microservices Deep-Dive (`/services`)**
    - Auth Service: Identity, TOTP MFA, and Token Rotation
-   - Topology Service: Spatial Coordinates and Proximity Mapping
+   - Topology Service: Spatial Coordinates, Proximity Mapping & Product Catalog
    - Digital Twin Sync: Real-Time WebSockets and State Caching
    - Mission Service: Route Planning and Heartbeat Watchdogs
    - Observation Service: Image Processing and Transactional Outbox
@@ -25,7 +25,7 @@
    - React Navigation Topology and Role Guards
    - Zustand Store Architecture
    - WebSocket Sync Hook Lifecycle
-   - Responsive SVG Digital Twin Rendering
+   - Responsive SVG Digital Twin Rendering, Mission Scope Control & Dual QR Scanner
 6. **Robot Fleet Simulator Deep-Dive (`/apps/robot-simulator`)**
    - Simulation Engine Mechanics
    - Offline SQLite Buffering and Syncing Routines
@@ -172,8 +172,8 @@ Manages user accounts, JWT signatures, session revokations, and multi-factor aut
   * It generates a *new* access token and a *new* refresh token.
   * If a client attempts to reuse an old refresh token (indicating a potential replay attack), the server immediately revokes all active sessions for that user, requiring them to log in again.
 
-### Topology Service (Spatial Coordinates and Proximity Mapping)
-Manages physical layouts, assets, and 3D coordinate resolution.
+### Topology Service (Spatial Coordinates, Proximity Mapping & Product Catalog)
+Manages physical layouts, assets, 3D coordinate resolution, and inventory catalog CRUD operations.
 * **3D Euclidean Proximity Search**: When a robot scans a shelf barcode, it reports its physical location as `(x, y, z)` coordinates. The topology service maps these coordinates to a physical bin:
   1. The service queries all bins in the warehouse zone (fetched from the Redis cache).
   2. It calculates the Euclidean distance to each bin:
@@ -181,6 +181,7 @@ Manages physical layouts, assets, and 3D coordinate resolution.
   3. The bin with the smallest distance is selected.
   4. To prevent false mappings, the coordinates must fall within a 2-meter radius of the bin. If the nearest bin is further away, the request returns a `404 Not Found` error.
 * **Cache-Aside Pattern**: Since layouts change infrequently, querying PostgreSQL on every coordinate update is inefficient. The topology service caches layouts in Redis. Layout updates invalidate the cache, ensuring consistency on subsequent reads.
+* **Product Catalog & WMS Inventory Mapping**: Provides backend CRUD operations (`GET`, `POST`, `DELETE`, `POST /delete-bulk`) for warehouse inventory. Queries execute an optimized SQL `LEFT JOIN` across `products`, `inventory`, and `bins` to dynamically resolve expected bin locations. Creating a product with a target location automatically inserts the inventory mapping into the PostgreSQL `inventory` table. Deleting products performs transactionally safe cascades across the `inventory` table.
 
 ### Digital Twin Sync (Real-Time WebSockets and State Caching)
 Bridges Kafka events to real-time client browsers. It mounts a FastAPI REST application alongside a Socket.IO server under a single ASGI web service.
@@ -237,6 +238,23 @@ The `useWebSocket` hook manages the live Socket.IO connection:
 ### Responsive SVG Digital Twin Rendering
 Renders the warehouse layout using SVGs instead of canvas elements, allowing for responsive, CSS-stylable graphics. Bins are rendered as interactive rectangles, and robots are rendered as moving circles. The colors of the bin elements update dynamically based on the state in the Zustand store (e.g., green for verified, red for mismatch).
 
+### Extended Supervisor Mission Control & Scope Assignment
+The Mission Control module (`MissionControl.tsx`) supports granular audit scope selection (`Full Warehouse Audit`, `Specific Zone Audit`, `Specific Aisle Audit`, `Specific Rack Audit`).
+* **Contextual Target Selection**: Dynamically renders scope-dependent dropdowns (Zone ID, Aisle numbers, Rack IDs).
+* **Auto-Naming Engine**: Automatically generates contextual mission names (e.g., *"Aisle 3 Spot Check"*, *"Zone B Full Audit"*).
+* **Dynamic Target Calculation**: Calculates expected target bin counts (e.g., Full Warehouse = 300 bins, Rack = 8 bins).
+* **Robot Fleet Assignment**: Enables assigning specific active AMRs (`MOCK_ROBOTS`) to scheduled missions.
+
+### UI Ergonomics & Modal Vertical Overflow Protection
+All modal dialogs (`Modal.tsx`) enforce viewport height safety constraints via `max-h-[90vh] overflow-y-auto` CSS styles on Radix `Dialog.Content`. Forms with extensive controls (e.g., Mission Scheduling) use responsive multi-column grid layouts (`grid-cols-1 sm:grid-cols-2`) to optimize vertical screen real estate.
+
+### Inventory & Dual Inbound/Outbound QR Scanner
+The Inventory Manager page (`InventoryManagement.tsx`) connects directly to the backend database via `productsApi` (`http://localhost:8001/api/v1`):
+* **Product Catalog View**: Displays active database stock with search queries, category filters, and multi-select checkboxes for bulk product removal when items leave the warehouse.
+* **Dual QR Code Scanner Simulator**:
+  * **Inbound Scanner Mode**: Simulates dock camera feeds with animated laser sweeps, decoding preset barcode payloads and registering new products into the backend database.
+  * **Outbound Scanner Mode**: Dynamically parses stock *currently present in the database* as scan presets. Scanning an outbound barcode and confirming dispatch calls the backend delete endpoint (`DELETE /api/v1/products/{sku}`), transactionally removing the product and its inventory mappings.
+
 ## 6. ROBOT FLEET SIMULATOR (`/apps/robot-simulator`)
 
 Simulates fleets of autonomous auditing robots moving through the warehouse.
@@ -254,10 +272,10 @@ To simulate intermittent WiFi connections, the simulator uses a local SQLite dat
 
 The database runs on PostgreSQL 16. The schema enforces integrity using foreign keys, indexes, table partitions, and triggers.
 
-### Table Partitioning (Scale Design)
-The `observations` table is range-partitioned on the `observed_at` column. Monthly tables (e.g., `observations_2026_07`) are generated dynamically. This ensures that:
-* Database search scans only traverse the relevant monthly table instead of the entire historical dataset.
-* Historical data cleanup is simple: dropping old partitions via `DROP TABLE` is a metadata-only operation, avoiding the table locks and slow transaction logs of large `DELETE` queries.
+### Relational Table Design & Primary Key Integrity
+The database enforces relational integrity using foreign keys, indexes, and automated triggers.
+* **Observation Primary Key Integrity**: The `observations` table uses a single UUID primary key `id` (`PRIMARY KEY (id)`). This guarantees that downstream tables like `reconciliation_results` can declare strict foreign key constraints (`observation_id REFERENCES observations(id)`), ensuring relational integrity across scan events and reconciliation outputs.
+* **Products & Inventory Domain**: The `products` table maintains master SKU records, while the `inventory` table maps physical `bin_id` addresses to expected SKUs and quantities (`UNIQUE(bin_id, sku)`). Creating products with target locations automatically links WMS inventory records.
 
 ### Indexing Strategies
 * **Spatial Lookup Indexes**: Indexing foreign keys (e.g., `idx_bins_shelf`, `idx_shelves_rack`) speeds up nested topology joins.
@@ -958,6 +976,54 @@ This section contains definitions for the remaining microservice endpoints.
     }
   ]
   ```
+
+### 13. `GET /api/v1/products`
+* **Purpose**: Retrieves all active master products from PostgreSQL database alongside their mapped bin location code.
+* **Headers**: `Content-Type: application/json`
+* **Execution Flow**:
+  1. Executes a SQL `LEFT JOIN` across `products`, `inventory`, and `bins`.
+  2. Maps bin codes to the product record's `location` field.
+  3. Returns `200 OK` array of products.
+
+### 14. `POST /api/v1/products`
+* **Purpose**: Adds/registers a new product into the database and links its expected WMS bin location.
+* **Headers**: `Content-Type: application/json`
+* **Request Body**:
+  ```json
+  {
+    "sku": "SKU-ELEC-005",
+    "name": "Sony PlayStation 5 Slim",
+    "category": "Electronics",
+    "location": "A1-R4-S3-B2",
+    "unit_of_measure": "EACH",
+    "weight_kg": 3.9
+  }
+  ```
+* **Execution Flow**:
+  1. Inserts product record into the `products` table.
+  2. Resolves target `bin_id` from `bins` using `location` code.
+  3. Inserts inventory record into `inventory` table (`INSERT INTO inventory (bin_id, sku, expected_qty)`).
+  4. Returns `201 Created` status with saved product details.
+
+### 15. `DELETE /api/v1/products/{sku}`
+* **Purpose**: Removes a product from the warehouse database as it leaves/ships out.
+* **Execution Flow**:
+  1. Transactionally deletes referencing rows in `inventory` table.
+  2. Deletes product record from `products` table.
+  3. Returns `200 OK` status with confirmation message.
+
+### 16. `POST /api/v1/products/delete-bulk`
+* **Purpose**: Performs bulk deletion of products leaving the warehouse.
+* **Request Body**:
+  ```json
+  {
+    "skus": ["SKU-ELEC-001", "SKU-FURN-002"]
+  }
+  ```
+* **Execution Flow**:
+  1. Deletes matching `inventory` records in bulk (`sku = ANY(:skus)`).
+  2. Deletes matching `products` records in bulk.
+  3. Returns `200 OK` with deleted item count.
 
 ## 24. JSON SCHEMA AND EVENT BUS ENVELOPES CATALOG
 
