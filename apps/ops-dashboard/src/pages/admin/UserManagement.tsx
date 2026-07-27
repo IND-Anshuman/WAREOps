@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
   Search, Filter, MoreVertical, UserPlus, ChevronRight,
-  Shield, Clock, Mail, X, Check, AlertTriangle
+  Shield, Clock, Mail, X, Check, AlertTriangle, Download
 } from 'lucide-react';
+import { exportToCsv } from '../../utils/exportCsv';
 
 // ─── Mock Data ─────────────────────────────────────────────────────────────────
 const users = [
@@ -225,12 +226,24 @@ export default function UserManagement() {
           <h1 className="text-2xl font-bold text-slate-100">User Management</h1>
           <p className="text-sm text-slate-500 mt-1">{users.length} users across {[...new Set(users.map(u => u.warehouse))].length} warehouses</p>
         </div>
-        <button
-          onClick={() => setShowInviteModal(true)}
-          className="flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-all shadow-lg shadow-indigo-500/20"
-        >
-          <UserPlus className="h-4 w-4" /> Invite User
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              const headers = ['User ID', 'Name', 'Email', 'Role', 'Status', 'Warehouse', 'Last Login'];
+              const rows = filtered.map(u => [u.id, u.name, u.email, u.role, u.status, u.warehouse, u.lastLogin]);
+              exportToCsv('user_roster_export', headers, rows);
+            }}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] px-4 py-2.5 text-sm font-semibold text-slate-300 transition-all"
+          >
+            <Download className="h-4 w-4" /> Export CSV
+          </button>
+          <button
+            onClick={() => setShowInviteModal(true)}
+            className="flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-all shadow-lg shadow-indigo-500/20"
+          >
+            <UserPlus className="h-4 w-4" /> Invite User
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}
