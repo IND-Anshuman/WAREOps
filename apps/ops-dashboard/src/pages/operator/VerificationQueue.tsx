@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { CheckCircle2, RefreshCw, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle2, RefreshCw, AlertTriangle, Image as ImageIcon, Download } from 'lucide-react';
+import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 
@@ -21,14 +22,27 @@ export default function VerificationQueue() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-100">Verification Queue</h1>
           <p className="text-sm text-slate-400">Review flagged low-confidence observations and solve inventory discrepancies.</p>
         </div>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400">
-          {observations.length} Pending
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400">
+            {observations.length} Pending
+          </span>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const headers = ['ID', 'Bin Code', 'Expected SKU', 'Observed SKU', 'Confidence %', 'Flagged Time', 'Reason'];
+              const rows = observations.map(o => [o.id, o.binCode, o.expectedSku, o.observedSku, o.confidence, o.time, o.reason]);
+              exportToCsv('verification_queue_export', headers, rows);
+            }}
+            className="flex items-center gap-1.5 text-xs py-2 px-3"
+          >
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
+        </div>
       </div>
 
       {observations.length > 0 ? (
