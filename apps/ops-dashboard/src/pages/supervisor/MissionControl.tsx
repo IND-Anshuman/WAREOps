@@ -1,15 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Plus, Calendar, Compass, RefreshCw } from 'lucide-react';
+import { Play, Pause, Plus, Calendar, Compass, RefreshCw, Download } from 'lucide-react';
+import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Table } from '../../components/ui/Table';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
-import { MOCK_MISSIONS, MOCK_ROBOTS } from '../../api/mockData';
+import { missionsApi, robotsApi } from '../../api/client';
+import type { Mission, Robot } from '../../types';
 
 export default function MissionControl() {
-  const [missions, setMissions] = useState(MOCK_MISSIONS);
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [robots, setRobots] = useState<Robot[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fetchMissionsAndRobots = async () => {
+    try {
+      setLoading(true);
+      const [mList, rList] = await Promise.all([
+        missionsApi.getMissions().catch(() => []),
+        robotsApi.getRobots().catch(() => []),
+      ]);
+      setMissions(mList);
+      setRobots(rList);
+    } catch (err) {
+      console.error('Failed to load missions/robots:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMissionsAndRobots();
+  }, []);
   
   // Create mission states
   const [name, setName] = useState('');
@@ -70,7 +94,7 @@ export default function MissionControl() {
       binsTotal = 8;
     }
 
-    const assignedRobot = MOCK_ROBOTS.find(r => r.id === assignedRobotId);
+    const assignedRobot = robots.find(r => r.id === assignedRobotId);
 
     const newMission = {
       id: `mission-00${missions.length + 1}`,
@@ -101,9 +125,22 @@ export default function MissionControl() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-100">Mission Control</h1>
           <p className="text-sm text-slate-400">Schedule inventory audits, track active robot positions, and configure scan priorities.</p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} variant="primary" className="flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> Schedule Audit
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const headers = ['Mission ID', 'Name', 'Scope', 'Target Scope ID', 'Target Bins', 'Assigned Robot', 'Status', 'Progress %'];
+              const rows = missions.map(m => [m.id, m.name, m.audit_scope || 'ZONE', m.target_scope_id || 'Zone A', m.bins_total, m.robot_name || 'Unassigned', m.status, m.progress_percent]);
+              exportToCsv('missions_export', headers, rows);
+            }}
+            className="flex items-center gap-1.5"
+          >
+            <Download className="w-4 h-4" /> Export CSV
+          </Button>
+          <Button onClick={() => setIsModalOpen(true)} variant="primary" className="flex items-center gap-1.5">
+            <Plus className="w-4 h-4" /> Schedule Audit
+          </Button>
+        </div>
       </div>
 
       {/* Active Missions Card Grid */}
@@ -208,7 +245,7 @@ export default function MissionControl() {
       </div>
 
       {/* Create Mission Modal */}
-      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Schedule Audit Mission">
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Schedule Audit Mission" position="top-center">
         <form onSubmit={handleCreate} className="space-y-4">
           <Input
             label="Audit Mission Name"
@@ -303,7 +340,7 @@ export default function MissionControl() {
                 onChange={(e) => setAssignedRobotId(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none bg-slate-900 border border-white/08 focus:border-indigo-500/50"
               >
-                {MOCK_ROBOTS.map(robot => (
+                {robots.map(robot => (
                   <option key={robot.id} value={robot.id}>{robot.name} ({robot.status})</option>
                 ))}
               </select>
