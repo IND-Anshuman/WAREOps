@@ -311,7 +311,7 @@ class AuditLog(Base):
     before_state: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     after_state: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     outcome: Mapped[str] = mapped_column(String(20), nullable=False, default="SUCCESS")  # SUCCESS|FAILURE
-    metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column("metadata", JSONB, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
