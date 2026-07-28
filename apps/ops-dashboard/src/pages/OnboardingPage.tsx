@@ -31,67 +31,57 @@ import {
 import { FluidIslandNavbar } from '../components/landing/FluidIslandNavbar';
 import { EnterpriseFooter } from '../components/landing/EnterpriseFooter';
 
-// TEAM MEMBERS DATA (5 People)
+// TEAM MEMBERS DATA (5 Core Engineers)
 const TEAM_MEMBERS = [
   {
     id: 'anshuman',
     name: 'Anshuman Singh',
-    role: 'System Architect & Backend Lead',
-    tagline: 'Kafka Conduit, Event Bus & Microservices',
-    bio: 'Architected the high-throughput transactional outbox, Kafka event backbone, and multi-service relational schemas for sub-10ms state updates.',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-    specialties: ['Distributed Systems', 'Kafka & Outbox Pattern', 'PostgreSQL Partitioning'],
-    github: '#',
-    linkedin: '#',
-    badge: 'Lead Architect'
+    initials: 'AS',
+    role: 'Backend & Systems Architect',
+    tagline: 'Backend Microservices & Frontend Core',
+    bio: 'Architected the core backend microservices, transactional event bus, relational schemas, and contributed key parts of the frontend platform interface.',
+    specialties: ['Backend Microservices', 'Frontend Systems', 'Relational Schemas'],
+    badge: 'Backend & Full-Stack'
   },
   {
-    id: 'elena',
-    name: 'Elena Rostova',
-    role: 'Robotics & Navigation Lead',
-    tagline: 'LiDAR SLAM & AMR Motion Planning',
-    bio: 'Engineered autonomous fleet pathfinding, wheel odometry telemetry, and ROS2 integration for 24/7 continuous aisle navigation.',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80',
-    specialties: ['ROS2 & SLAM', 'Path Optimization', 'Fleet Controller'],
-    github: '#',
-    linkedin: '#',
-    badge: 'Robotics Lead'
+    id: 'utkarsh',
+    name: 'Utkarsh Kumar Bajpai',
+    initials: 'UB',
+    role: 'Frontend Architect & Robotics Engineer',
+    tagline: 'Frontend Platform & Robotics Integration',
+    bio: 'Engineered the majority of the frontend application interface, interactive spatial components, and contributed directly to autonomous robotics integrations.',
+    specialties: ['Frontend Architecture', 'Spatial Digital Twin', 'Robotics Contribution'],
+    badge: 'Frontend & Robotics'
   },
   {
-    id: 'marcus',
-    name: 'Marcus Vance',
-    role: 'Spatial Twin & Frontend Lead',
-    tagline: 'Real-time WebSocket & React Engineering',
-    bio: 'Built the 3D warehouse twin visualizer, responsive SVG bin grid system, and role-based operational command interfaces.',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-    specialties: ['React & Tailwind', 'WebSocket State Engine', 'Spatial UI/UX'],
-    github: '#',
-    linkedin: '#',
-    badge: 'Frontend Lead'
+    id: 'abhinav',
+    name: 'Abhinav Goel',
+    initials: 'AG',
+    role: 'Lead Robotics Architect',
+    tagline: 'ROS 2, SLAM & Autonomous Navigation',
+    bio: 'Lead robotics architect responsible for designing the ROS 2 node architecture, LiDAR SLAM mapping, and path planning algorithms for autonomous movement.',
+    specialties: ['ROS 2 Architecture', 'LiDAR SLAM', 'Autonomous Movement'],
+    badge: 'Lead Robotics Architect'
   },
   {
-    id: 'sophia',
-    name: 'Sophia Chen',
-    role: 'Computer Vision & AI Engineer',
-    tagline: 'Barcode OCR & Optical Anomaly Detection',
-    bio: 'Developed on-robot neural optical scanning for rapid bin barcode reading and instant visual stock verification under variable lighting.',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=400&q=80',
-    specialties: ['Computer Vision', 'PyTorch / OpenCV', 'Edge Barcode OCR'],
-    github: '#',
-    linkedin: '#',
-    badge: 'Vision AI'
+    id: 'alok',
+    name: 'Alok Kumar Mishra',
+    initials: 'AM',
+    role: 'Deployment & Vision Systems Engineer',
+    tagline: 'Software Deployment & OpenCV QR Processing',
+    bio: 'Deployed the complete software platform and engineered the OpenCV computer vision backend pipeline for real-time optical QR processing.',
+    specialties: ['Software Deployment', 'OpenCV Vision Backend', 'QR Code Processing'],
+    badge: 'Deployment & OpenCV'
   },
   {
-    id: 'david',
-    name: 'David Kalu',
-    role: 'DevOps & Security Engineer',
-    tagline: 'RBAC Security Context & K8s Infrastructure',
-    bio: 'Designed TOTP MFA authentication, role-based token rotation, Docker containerization, and Prometheus telemetry alerting pipelines.',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
-    specialties: ['OAuth2 / TOTP MFA', 'Kubernetes & Docker', 'Prometheus & Grafana'],
-    github: '#',
-    linkedin: '#',
-    badge: 'Security & Ops'
+    id: 'anshu',
+    name: 'Anshu Kashyap',
+    initials: 'AK',
+    role: 'Application Development Lead',
+    tagline: 'WAREOps App & Platform Experience',
+    bio: 'Responsible for designing and developing the core WAREOps application experience, operational workflows, and mobile/web application features.',
+    specialties: ['WAREOps App Dev', 'User Experience', 'Operational Workflows'],
+    badge: 'App Architect'
   }
 ];
 
@@ -540,15 +530,10 @@ export default function OnboardingPage() {
                 className="group relative p-6 rounded-3xl bg-slate-900/60 border border-white/10 hover:border-indigo-500/40 transition-all duration-300 flex flex-col justify-between space-y-6 hover:shadow-xl hover:shadow-indigo-500/10"
               >
                 <div className="space-y-4">
-                  {/* Avatar & Badge Header */}
+                  {/* Initials Badge Header */}
                   <div className="flex items-center justify-between">
-                    <div className="relative">
-                      <img
-                        src={member.avatar}
-                        alt={member.name}
-                        className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500/30 group-hover:border-indigo-400 transition-colors"
-                      />
-                      <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-slate-950" />
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600/30 to-purple-600/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-200 font-mono font-black text-lg shadow-lg shadow-indigo-500/20 group-hover:border-indigo-400 group-hover:scale-105 transition-all">
+                      {member.initials}
                     </div>
                     <span className="px-3 py-1 rounded-full text-[10px] font-mono font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-300">
                       {member.badge}
@@ -588,12 +573,9 @@ export default function OnboardingPage() {
                       <CheckCircle2 className="h-3.5 w-3.5" /> Core Team Member
                     </span>
                     <div className="flex items-center gap-2">
-                      <a href={member.github} className="hover:text-white transition-colors">
-                        <Github className="h-4 w-4" />
-                      </a>
-                      <a href={member.linkedin} className="hover:text-indigo-400 transition-colors">
-                        <Linkedin className="h-4 w-4" />
-                      </a>
+                      <span className="text-[10px] font-mono text-indigo-400 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                        {member.initials}
+                      </span>
                     </div>
                   </div>
                 </div>
