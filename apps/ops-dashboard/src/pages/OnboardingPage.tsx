@@ -40,17 +40,33 @@ const TEAM_MEMBERS = [
     role: 'Backend & Systems Architect',
     tagline: 'Backend Microservices & Frontend Core',
     bio: 'Architected the core backend microservices, transactional event bus, relational schemas, and contributed key parts of the frontend platform interface.',
-    specialties: ['Backend Microservices', 'Frontend Systems', 'Relational Schemas'],
-    badge: 'Backend & Full-Stack'
+    specialties: [
+      'FastAPI Microservices', 
+      'PostgreSQL Partitioning', 
+      'SQLAlchemy ORM', 
+      'Outbox Event Pattern', 
+      'REST API Design', 
+      'Frontend Integration', 
+      'Docker Containers',
+      'Database Migrations'
+    ],
+    badge: 'Lead Software Architect'
   },
   {
     id: 'utkarsh',
-    name: 'Utkarsh Kumar Bajpai',
-    initials: 'UB',
+    name: 'Utkarsh Kumar',
+    initials: 'UK',
     role: 'Frontend Architect & Robotics Engineer',
     tagline: 'Frontend Platform & Robotics Integration',
     bio: 'Engineered the majority of the frontend application interface, interactive spatial components, and contributed directly to autonomous robotics integrations.',
-    specialties: ['Frontend Architecture', 'Spatial Digital Twin', 'Robotics Contribution'],
+    specialties: [
+      'Frontend Architecture', 
+      'Spatial Digital Twin', 
+      'Robotics Contribution',
+      'Tailwind & Modern CSS',
+      'TypeScript UI Components',
+      'WebSocket Real-time State'
+    ],
     badge: 'Frontend & Robotics'
   },
   {
@@ -60,7 +76,16 @@ const TEAM_MEMBERS = [
     role: 'Lead Robotics Architect',
     tagline: 'ROS 2, SLAM & Autonomous Navigation',
     bio: 'Lead robotics architect responsible for designing the ROS 2 node architecture, LiDAR SLAM mapping, and path planning algorithms for autonomous movement.',
-    specialties: ['ROS 2 Architecture', 'LiDAR SLAM', 'Autonomous Movement'],
+    specialties: [
+      'ROS 2 Navigation2', 
+      'LiDAR SLAM Mapping', 
+      'Autonomous Pathfinding', 
+      'Wheel Odometry Telemetry', 
+      'Obstacle Avoidance', 
+      'TF2 Static Transforms', 
+      'Kinematic Controllers', 
+      'Gazebo Simulation'
+    ],
     badge: 'Lead Robotics Architect'
   },
   {
@@ -70,7 +95,14 @@ const TEAM_MEMBERS = [
     role: 'Deployment & Vision Systems Engineer',
     tagline: 'Software Deployment & OpenCV QR Processing',
     bio: 'Deployed the complete software platform and engineered the OpenCV computer vision backend pipeline for real-time optical QR processing.',
-    specialties: ['Software Deployment', 'OpenCV Vision Backend', 'QR Code Processing'],
+    specialties: [
+      'Software Deployment', 
+      'OpenCV Vision Backend', 
+      'QR Code Processing',
+      'Docker Containerization',
+      'Edge Camera Integration',
+      'CI/CD Deployment Pipelines'
+    ],
     badge: 'Deployment & OpenCV'
   },
   {
@@ -80,7 +112,14 @@ const TEAM_MEMBERS = [
     role: 'Application Development Lead',
     tagline: 'WAREOps App & Platform Experience',
     bio: 'Responsible for designing and developing the core WAREOps application experience, operational workflows, and mobile/web application features.',
-    specialties: ['WAREOps App Dev', 'User Experience', 'Operational Workflows'],
+    specialties: [
+      'WAREOps App Dev', 
+      'User Experience', 
+      'Operational Workflows',
+      'Mobile Cross-Platform Dev',
+      'Role-based UI Navigation',
+      'Client-side Cache Management'
+    ],
     badge: 'App Architect'
   }
 ];
@@ -522,89 +561,129 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          {/* Team Members Grid (5 People) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {TEAM_MEMBERS.map((member) => (
-              <div
-                key={member.id}
-                className="group relative p-6 rounded-3xl bg-slate-900/60 border border-white/10 hover:border-indigo-500/40 transition-all duration-300 flex flex-col justify-between space-y-6 hover:shadow-xl hover:shadow-indigo-500/10"
-              >
-                <div className="space-y-4">
-                  {/* Initials Badge Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600/30 to-purple-600/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-200 font-mono font-black text-lg shadow-lg shadow-indigo-500/20 group-hover:border-indigo-400 group-hover:scale-105 transition-all">
-                      {member.initials}
-                    </div>
-                    <span className="px-3 py-1 rounded-full text-[10px] font-mono font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-300">
-                      {member.badge}
-                    </span>
-                  </div>
-
-                  {/* Name & Role */}
-                  <div>
-                    <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition-colors">
-                      {member.name}
-                    </h3>
-                    <p className="text-xs font-mono text-cyan-400">{member.role}</p>
-                    <p className="text-[11px] font-mono text-slate-400 mt-0.5">{member.tagline}</p>
-                  </div>
-
-                  {/* Bio */}
-                  <p className="text-xs text-slate-300 leading-relaxed font-sans">
-                    {member.bio}
-                  </p>
-                </div>
-
-                {/* Specialties Tags & Socials */}
-                <div className="space-y-4 pt-4 border-t border-white/06">
-                  <div className="flex flex-wrap gap-1.5">
-                    {member.specialties.map((spec, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.04] text-slate-300 border border-white/06"
-                      >
-                        {spec}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-                    <span className="flex items-center gap-1.5 text-emerald-400">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Core Team Member
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-indigo-400 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                        {member.initials}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* 6th Card: Join / Mission Vision */}
-            <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-950/40 via-slate-900/60 to-cyan-950/40 border border-indigo-500/30 flex flex-col justify-between space-y-6">
-              <div className="space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                  <Sparkles className="h-6 w-6" />
-                </div>
-                <h3 className="text-xl font-bold text-white">Building Next-Gen Logistics</h3>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Our mission is to eliminate physical inventory discrepancies across global supply chains. Powered by continuous robotics and open architecture standards.
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-white/10">
-                <button
-                  onClick={handleLaunchAuth}
-                  className="w-full py-3 rounded-full bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-semibold text-xs tracking-wide shadow-lg transition-all flex items-center justify-center gap-2"
+          {/* Team Members Layout: Row 1 (3 Members), Row 2 Centered (2 Members) */}
+          <div className="space-y-8">
+            {/* Row 1: 3 Core Architects */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {TEAM_MEMBERS.slice(0, 3).map((member) => (
+                <div
+                  key={member.id}
+                  className="group relative p-6 rounded-3xl bg-slate-900/60 border border-white/10 hover:border-indigo-500/40 transition-all duration-300 flex flex-col justify-between space-y-6 hover:shadow-xl hover:shadow-indigo-500/10"
                 >
-                  <span>Launch Platform Demo</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              </div>
+                  <div className="space-y-4">
+                    {/* Initials Badge Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600/30 to-purple-600/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-200 font-mono font-black text-lg shadow-lg shadow-indigo-500/20 group-hover:border-indigo-400 group-hover:scale-105 transition-all">
+                        {member.initials}
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-[10px] font-mono font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-300">
+                        {member.badge}
+                      </span>
+                    </div>
+
+                    {/* Name & Role */}
+                    <div>
+                      <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition-colors">
+                        {member.name}
+                      </h3>
+                      <p className="text-xs font-mono text-cyan-400">{member.role}</p>
+                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">{member.tagline}</p>
+                    </div>
+
+                    {/* Bio */}
+                    <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                      {member.bio}
+                    </p>
+                  </div>
+
+                  {/* Specialties Tags */}
+                  <div className="space-y-4 pt-4 border-t border-white/06">
+                    <div className="flex flex-wrap gap-1.5">
+                      {member.specialties.map((spec, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.04] text-slate-300 border border-white/06"
+                        >
+                          {spec}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                      <span className="flex items-center gap-1.5 text-emerald-400">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Core Team Member
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-indigo-400 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                          {member.initials}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
+            {/* Row 2: 2 Core Engineers (Centered) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+              {TEAM_MEMBERS.slice(3, 5).map((member) => (
+                <div
+                  key={member.id}
+                  className="group relative p-6 rounded-3xl bg-slate-900/60 border border-white/10 hover:border-indigo-500/40 transition-all duration-300 flex flex-col justify-between space-y-6 hover:shadow-xl hover:shadow-indigo-500/10"
+                >
+                  <div className="space-y-4">
+                    {/* Initials Badge Header */}
+                    <div className="flex items-center justify-between">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600/30 to-purple-600/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-200 font-mono font-black text-lg shadow-lg shadow-indigo-500/20 group-hover:border-indigo-400 group-hover:scale-105 transition-all">
+                        {member.initials}
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-[10px] font-mono font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-300">
+                        {member.badge}
+                      </span>
+                    </div>
+
+                    {/* Name & Role */}
+                    <div>
+                      <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition-colors">
+                        {member.name}
+                      </h3>
+                      <p className="text-xs font-mono text-cyan-400">{member.role}</p>
+                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">{member.tagline}</p>
+                    </div>
+
+                    {/* Bio */}
+                    <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                      {member.bio}
+                    </p>
+                  </div>
+
+                  {/* Specialties Tags */}
+                  <div className="space-y-4 pt-4 border-t border-white/06">
+                    <div className="flex flex-wrap gap-1.5">
+                      {member.specialties.map((spec, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.04] text-slate-300 border border-white/06"
+                        >
+                          {spec}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                      <span className="flex items-center gap-1.5 text-emerald-400">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Core Team Member
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-indigo-400 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                          {member.initials}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
         </div>
