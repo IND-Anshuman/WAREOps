@@ -1,23 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, RefreshCw, AlertTriangle, Image as ImageIcon, Download } from 'lucide-react';
 import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
-
-const INITIAL_PENDING_OBSERVATIONS = [
-  { id: 'obs-001', binCode: 'A1-R2-S3-B2', expectedSku: 'SKU-ELEC-002', observedSku: 'SKU-ELEC-001', confidence: 68, time: '3 min ago', reason: 'Low Scan Confidence' },
-  { id: 'obs-002', binCode: 'A2-R3-S1-B1', expectedSku: 'SKU-FURN-001', observedSku: 'SKU-FURN-001', confidence: 72, time: '12 min ago', reason: 'Blurry Frame Detected' },
-  { id: 'obs-003', binCode: 'A3-R1-S2-B2', expectedSku: 'SKU-BOOK-001', observedSku: 'None', confidence: 45, time: '40 min ago', reason: 'Missing Item Check' },
-  { id: 'obs-004', binCode: 'A1-R4-S3-B1', expectedSku: 'SKU-ELEC-001', observedSku: 'SKU-WRONG-007', confidence: 55, time: '1 hour ago', reason: 'SKU Mismatch' },
-];
+import { observationsApi } from '../../api/observations';
+import { inventoryApi, alertsApi } from '../../api/client';
+import type { PendingObservation } from '../../api/mockData';
 
 export default function VerificationQueue() {
-  const [observations, setObservations] = useState(INITIAL_PENDING_OBSERVATIONS);
+  const [observations, setObservations] = useState<PendingObservation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  const handleResolve = (id: string, action: string) => {
-    alert(`Observation ${id} resolved with action: ${action}`);
-    setObservations(prev => prev.filter(obs => obs.id !== id));
+  useEffect(() => {
+    fetchQueue();
+  }, []);
+
+  const fetchQueue = async () => {
+    try {
+      setLoading(true);
+      const queue = await observationsApi.getPendingQueue();
+      setObservations(queue);
+    } catch (err) {
+      console.error('Failed to load pending queue:', err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleResolve = async (
+    obs: PendingObservation,
+    action: 'ACCEPT_AS_CORRECT' | 'REQUEST_RESCAN' | 'FLAG_DISCREPANCY'
+  ) => {
+    try {
+      await observationsApi.resolveObservation(obs.id, action);
+
+      if (action === 'REQUEST_RESCAN') {
+        await inventoryApi.requestRescan(obs.binCode);
+        setActionMessage(`Dispatched AMR rescan mission for bin ${obs.binCode}`);
+      } else if (action === 'FLAG_DISCREPANCY') {
+        await alertsApi.createAlert({
+          type: 'MISPLACED',
+          severity: 'HIGH',
+          bin_code: obs.binCode,
+          expected_sku: obs.expectedSku,
+          observed_sku: obs.observedSku,
+          title: `Operator Discrepancy Flag: ${obs.binCode}`,
+          description: `Flagged during verification. Reason: ${obs.reason}. Expected ${obs.expectedSku}, observed ${obs.observedSku}`,
+          image_url: obs.image_url,
+        });
+        setActionMessage(`Flagged discrepancy for bin ${obs.binCode} and created high-priority alert.`);
+      } else {
+        setActionMessage(`Accepted observation for bin ${obs.binCode}. WMS record updated.`);
+      }
+
+      setObservations((prev) => prev.filter((o) => o.id !== obs.id));
+
+      setTimeout(() => setActionMessage(null), 3000);
+    } catch (err) {
+      console.error('Failed to resolve observation:', err);
+      alert('Error updating observation status.');
+    }
+  };
+
+  if (loading) return <div className="p-12 text-center text-slate-400">Loading observation queue from DB...</div>;
 
   return (
     <div className="space-y-6">
@@ -35,7 +81,7 @@ export default function VerificationQueue() {
             variant="secondary"
             onClick={() => {
               const headers = ['ID', 'Bin Code', 'Expected SKU', 'Observed SKU', 'Confidence %', 'Flagged Time', 'Reason'];
-              const rows = observations.map(o => [o.id, o.binCode, o.expectedSku, o.observedSku, o.confidence, o.time, o.reason]);
+              const rows = observations.map((o) => [o.id, o.binCode, o.expectedSku, o.observedSku, o.confidence, o.time, o.reason]);
               exportToCsv('verification_queue_export', headers, rows);
             }}
             className="flex items-center gap-1.5 text-xs py-2 px-3"
@@ -45,11 +91,17 @@ export default function VerificationQueue() {
         </div>
       </div>
 
+      {actionMessage && (
+        <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-sm flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-indigo-400" />
+          <span>{actionMessage}</span>
+        </div>
+      )}
+
       {observations.length > 0 ? (
         <div className="space-y-5">
-          {observations.map(obs => (
+          {observations.map((obs) => (
             <Card key={obs.id} className="grid grid-cols-1 lg:grid-cols-3 gap-6 hover:border-white/10">
-              
               {/* Left Side: Detail & Code */}
               <div className="space-y-4">
                 <div>
@@ -73,47 +125,57 @@ export default function VerificationQueue() {
                   </div>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-400">Robot Confidence:</span>
-                    <span className={`font-semibold ${
-                      obs.confidence > 70 ? 'text-yellow-400' : 'text-red-400 animate-pulse'
-                    }`}>
+                    <span
+                      className={`font-semibold ${
+                        obs.confidence > 70 ? 'text-yellow-400' : 'text-red-400 animate-pulse'
+                      }`}
+                    >
                       {obs.confidence}%
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Middle Side: Camera Frame Preview */}
-              <div className="flex flex-col items-center justify-center bg-slate-950/60 rounded-xl border border-white/04 min-h-[160px] text-center p-4">
-                <ImageIcon className="w-8 h-8 text-slate-600 mb-2" />
-                <span className="text-xs text-slate-500 font-semibold mb-1">RAW IMAGE FRAME</span>
-                <span className="text-[10px] text-slate-500 font-mono">Frame UUID: {obs.id}-frame-raw</span>
+              {/* Middle Side: Camera Frame Extracted from DB */}
+              <div className="flex flex-col items-center justify-center bg-slate-950 rounded-xl border border-white/06 p-2 min-h-[180px] overflow-hidden">
+                {obs.image_url ? (
+                  <div className="relative w-full h-full flex flex-col items-center justify-center">
+                    <img src={obs.image_url} alt="DB Camera Frame" className="w-full h-36 object-contain rounded-lg" />
+                    <span className="text-[10px] text-slate-400 font-mono mt-1">DB Extracted Frame: {obs.id}</span>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <ImageIcon className="w-8 h-8 text-slate-600 mb-2" />
+                    <span className="text-xs text-slate-500 font-semibold mb-1">RAW IMAGE FRAME</span>
+                    <span className="text-[10px] text-slate-500 font-mono">Frame UUID: {obs.id}-frame-raw</span>
+                  </div>
+                )}
               </div>
 
               {/* Right Side: Action Triage */}
               <div className="flex flex-col justify-center space-y-3.5 lg:pl-6 lg:border-l border-white/06">
-                <Button 
-                  onClick={() => handleResolve(obs.id, 'ACCEPT_AS_CORRECT')}
-                  variant="primary" 
+                <Button
+                  onClick={() => handleResolve(obs, 'ACCEPT_AS_CORRECT')}
+                  variant="primary"
                   className="w-full flex items-center justify-center gap-1.5"
                 >
                   <CheckCircle2 className="w-4 h-4" /> Accept Observation
                 </Button>
-                <Button 
-                  onClick={() => handleResolve(obs.id, 'REQUEST_RESCAN')}
-                  variant="secondary" 
+                <Button
+                  onClick={() => handleResolve(obs, 'REQUEST_RESCAN')}
+                  variant="secondary"
                   className="w-full flex items-center justify-center gap-1.5"
                 >
                   <RefreshCw className="w-4 h-4" /> Dispatch Rescan
                 </Button>
-                <Button 
-                  onClick={() => handleResolve(obs.id, 'FLAG_DISCREPANCY')}
-                  variant="danger" 
+                <Button
+                  onClick={() => handleResolve(obs, 'FLAG_DISCREPANCY')}
+                  variant="danger"
                   className="w-full flex items-center justify-center gap-1.5"
                 >
                   <AlertTriangle className="w-4 h-4" /> Flag Discrepancy
                 </Button>
               </div>
-
             </Card>
           ))}
         </div>
@@ -129,3 +191,4 @@ export default function VerificationQueue() {
     </div>
   );
 }
+
