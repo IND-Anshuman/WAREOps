@@ -34,7 +34,6 @@ interface WarehouseFloorPlanProps {
   showRobots?: boolean;
   showBinStates?: boolean;
   showScanCones?: boolean;
-  showHeatmap?: boolean;
   filterStatus?: string;
   filterZone?: string;
   onBinClick: (bin: TwinBinState) => void;
@@ -86,21 +85,12 @@ export const WarehouseFloorPlan: React.FC<WarehouseFloorPlanProps> = ({
   showRobots = true,
   showBinStates = true,
   showScanCones = true,
-  showHeatmap = false,
   filterStatus = 'ALL',
   filterZone = 'ALL',
   onBinClick,
   onRobotClick,
 }) => {
   const [hoveredBin, setHoveredBin] = useState<TwinBinState | null>(null);
-  const [scanPulse, setScanPulse] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setScanPulse((prev) => (prev + 1) % 100);
-    }, 40);
-    return () => clearInterval(timer);
-  }, []);
 
   const filteredBins = useMemo(() => {
     return bins.filter((b) => {
@@ -295,6 +285,7 @@ export const WarehouseFloorPlan: React.FC<WarehouseFloorPlanProps> = ({
           {/* LEVEL 5: 3 PRODUCTS / BINS PER ROW */}
           {filteredBins.map((bin) => {
             const isSelected = selectedBinId === bin.bin_id;
+            const isHovered = hoveredBin?.bin_id === bin.bin_id;
             const theme = STATE_THEMES[showBinStates ? bin.bin_state : 'UNSCANNED'] || STATE_THEMES.UNSCANNED;
 
             return (
@@ -303,10 +294,13 @@ export const WarehouseFloorPlan: React.FC<WarehouseFloorPlanProps> = ({
                 onClick={() => onBinClick(bin)}
                 onMouseEnter={() => setHoveredBin(bin)}
                 onMouseLeave={() => setHoveredBin(null)}
-                className="cursor-pointer transition-all duration-200"
+                className="cursor-pointer"
               >
-                {/* Selected Halo */}
-                {isSelected && (
+                {/* Fixed Steady Hit Target */}
+                <rect x={bin.x - 3} y={bin.y - 3} width={48} height={22} fill="transparent" className="pointer-events-auto" />
+
+                {/* Selected or Hover Halo */}
+                {(isSelected || isHovered) && (
                   <rect
                     x={bin.x - 3}
                     y={bin.y - 3}
@@ -314,10 +308,10 @@ export const WarehouseFloorPlan: React.FC<WarehouseFloorPlanProps> = ({
                     height={22}
                     rx="6"
                     fill="none"
-                    stroke="#818cf8"
-                    strokeWidth="2"
+                    stroke={isSelected ? '#818cf8' : '#a5b4fc'}
+                    strokeWidth={isSelected ? '2' : '1.5'}
+                    strokeDasharray={isHovered && !isSelected ? '3 3' : undefined}
                     filter="url(#neonGlow)"
-                    className="animate-pulse"
                   />
                 )}
 
@@ -330,9 +324,9 @@ export const WarehouseFloorPlan: React.FC<WarehouseFloorPlanProps> = ({
                   rx="4"
                   fill={theme.fill}
                   fillOpacity={showBinStates ? (bin.bin_state === 'UNSCANNED' ? 0.35 : 0.85) : 0.4}
-                  stroke={isSelected ? '#ffffff' : theme.stroke}
-                  strokeWidth={isSelected ? '1.5' : '0.8'}
-                  className="hover:scale-105 transition-transform"
+                  stroke={isSelected ? '#ffffff' : isHovered ? '#818cf8' : theme.stroke}
+                  strokeWidth={isSelected ? '1.5' : isHovered ? '1.2' : '0.8'}
+                  className="pointer-events-none"
                 />
 
                 {/* Product Label Code */}
@@ -368,12 +362,24 @@ export const WarehouseFloorPlan: React.FC<WarehouseFloorPlanProps> = ({
             </g>
           )}
 
-          {/* SINGLE AMR BOT UNIT */}
-          {showRobots &&
-            robots.slice(0, 1).map((robot) => {
-              const rx = robot.x;
-              const ry = robot.y;
-              const isAuditing = robot.status === 'AUDITING';
+          {/* SINGLE AMR BOT UNIT & TRAJECTORY PATH */}
+          {showRobots && (
+            <g>
+              {/* AMR Planned Route Polyline */}
+              <polyline
+                points="230,175 230,410 670,410 670,175"
+                fill="none"
+                stroke="#6366f1"
+                strokeWidth="2"
+                strokeDasharray="6 4"
+                opacity="0.65"
+                filter="url(#neonGlow)"
+              />
+
+              {robots.slice(0, 1).map((robot) => {
+                const rx = robot.x;
+                const ry = robot.y;
+                const isAuditing = robot.status === 'AUDITING';
 
               return (
                 <g key={robot.robot_id} className="transition-all duration-700 ease-out">
@@ -411,6 +417,8 @@ export const WarehouseFloorPlan: React.FC<WarehouseFloorPlanProps> = ({
                 </g>
               );
             })}
+          </g>
+          )}
         </svg>
       </div>
 
