@@ -24,6 +24,7 @@ import AlertCenter from './pages/supervisor/AlertCenter';
 import MissionControl from './pages/supervisor/MissionControl';
 import TeamMonitor from './pages/supervisor/TeamMonitor';
 import InventoryManagement from './pages/supervisor/InventoryManagement';
+import SupervisorReports from './pages/supervisor/SupervisorReports';
 
 // Manager Pages
 import ExecutiveDashboard from './pages/manager/ExecutiveDashboard';
@@ -178,7 +179,7 @@ export default function App() {
             path="supervisor/reports"
             element={
               <ProtectedRoute allowedRoles={['WAREHOUSE_SUPERVISOR']}>
-                <div className="p-12 text-center text-slate-400">Reports module coming soon!</div>
+                <SupervisorReports />
               </ProtectedRoute>
             }
           />
@@ -277,10 +278,34 @@ export default function App() {
 
           {/* Shared Pages */}
           <Route
+            path="twin"
+            element={
+              <ProtectedRoute>
+                <DigitalTwin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="digital-twin"
             element={
               <ProtectedRoute>
                 <DigitalTwin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="manager/heatmap"
+            element={
+              <ProtectedRoute>
+                <HeatmapPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="heatmap"
+            element={
+              <ProtectedRoute>
+                <HeatmapPage />
               </ProtectedRoute>
             }
           />
