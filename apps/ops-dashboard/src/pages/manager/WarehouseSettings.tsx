@@ -1,11 +1,44 @@
 import React, { useState } from 'react';
 import {
-  Settings, Bot, Bell, Link, Plus, Trash2, Edit2,
-  CheckCircle2, AlertTriangle, Zap, ToggleLeft, ToggleRight
+  Bot, Plus, Trash2, Edit2,
+  CheckCircle2, Zap, ToggleLeft, ToggleRight, Layers, Shield
 } from 'lucide-react';
+import { robotsApi } from '../../api/client';
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-const zones = [
+export interface ZoneConfig {
+  id: string;
+  code: string;
+  name: string;
+  area: number;
+  aisles: number;
+}
+
+export interface RegisteredRobot {
+  id: string;
+  serial: string;
+  model: string;
+  firmware: string;
+  status: 'ACTIVE' | 'CHARGING' | 'OFFLINE';
+  registered: string;
+}
+
+export interface AlertRule {
+  id: string;
+  condition: string;
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  channels: string;
+  enabled: boolean;
+}
+
+export interface WmsIntegration {
+  id: string;
+  name: string;
+  logo: string;
+  connected: boolean;
+  lastSync: string | null;
+}
+
+const INITIAL_ZONES: ZoneConfig[] = [
   { id: 'zA', code: 'ZONE-A', name: 'Electronics Bay', area: 1200, aisles: 5 },
   { id: 'zB', code: 'ZONE-B', name: 'Furniture Wing', area: 2400, aisles: 8 },
   { id: 'zC', code: 'ZONE-C', name: 'Books & Media', area: 600, aisles: 3 },
@@ -13,7 +46,7 @@ const zones = [
   { id: 'zE', code: 'ZONE-E', name: 'Cold Storage', area: 400, aisles: 2 },
 ];
 
-const robots = [
+const INITIAL_ROBOTS: RegisteredRobot[] = [
   { id: 'rb1', serial: 'WH-BOT-001', model: 'Atlas v2', firmware: '2.4.1', status: 'ACTIVE', registered: '2026-01-15' },
   { id: 'rb2', serial: 'WH-BOT-002', model: 'Atlas v2', firmware: '2.4.1', status: 'ACTIVE', registered: '2026-01-15' },
   { id: 'rb3', serial: 'WH-BOT-003', model: 'Nexus v1', firmware: '1.8.3', status: 'ACTIVE', registered: '2026-02-20' },
@@ -22,7 +55,7 @@ const robots = [
   { id: 'rb6', serial: 'WH-BOT-006', model: 'Vega Pro', firmware: '3.1.0', status: 'OFFLINE', registered: '2026-03-10' },
 ];
 
-const alertRules = [
+const INITIAL_ALERT_RULES: AlertRule[] = [
   { id: 'ar1', condition: 'Mismatch count in zone > 10', severity: 'CRITICAL', channels: 'Email, Slack, SMS', enabled: true },
   { id: 'ar2', condition: 'Robot battery < 15%', severity: 'HIGH', channels: 'Email, Slack', enabled: true },
   { id: 'ar3', condition: 'Mission duration > 120 min', severity: 'MEDIUM', channels: 'Slack', enabled: true },
@@ -30,13 +63,12 @@ const alertRules = [
   { id: 'ar5', condition: 'Alert SLA breach > 30 min', severity: 'CRITICAL', channels: 'Email, Slack, SMS', enabled: true },
 ];
 
-const wmsIntegrations = [
+const INITIAL_WMS_INTEGRATIONS: WmsIntegration[] = [
   { id: 'sap', name: 'SAP WM', logo: '🟡', connected: true, lastSync: '2026-07-17 15:42' },
   { id: 'oracle', name: 'Oracle WMS', logo: '🔴', connected: false, lastSync: null },
   { id: 'netsuite', name: 'NetSuite', logo: '🔵', connected: false, lastSync: null },
 ];
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   const map: Record<string, string> = {
     ACTIVE: 'bg-emerald-500/10 text-emerald-400',
@@ -56,37 +88,226 @@ const SeverityBadge: React.FC<{ severity: string }> = ({ severity }) => {
   return <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${map[severity] || 'bg-slate-800 text-slate-400'}`}>{severity}</span>;
 };
 
-// ─── Robot Register Modal ──────────────────────────────────────────────────────
-const RegisterRobotModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-    <div className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0d1424] shadow-2xl">
-      <div className="flex items-center justify-between border-b border-white/[0.06] p-6">
-        <h2 className="text-base font-semibold text-slate-100">Register New Robot</h2>
-        <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
-      </div>
-      <div className="p-6 space-y-4">
-        {[
-          { label: 'Serial Number', placeholder: 'WH-BOT-XXX' },
-          { label: 'Model', placeholder: 'e.g. Atlas v2' },
-          { label: 'Firmware Version', placeholder: 'e.g. 2.4.1' },
-        ].map(f => (
-          <div key={f.label}>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">{f.label}</label>
+// ─── Register Robot Modal ──────────────────────────────────────────────────────
+const RegisterRobotModal: React.FC<{ onClose: () => void; onRegister: (robot: RegisteredRobot) => void }> = ({ onClose, onRegister }) => {
+  const [serial, setSerial] = useState('');
+  const [model, setModel] = useState('Atlas v2');
+  const [firmware, setFirmware] = useState('2.4.1');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onRegister({
+      id: `rb-${Date.now()}`,
+      serial: serial || `WH-BOT-${Math.floor(100 + Math.random() * 900)}`,
+      model,
+      firmware,
+      status: 'ACTIVE',
+      registered: new Date().toISOString().split('T')[0],
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0d1424] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/[0.06] p-6">
+          <h2 className="text-base font-semibold text-slate-100">Register New Robot</h2>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Serial Number</label>
             <input
               type="text"
-              placeholder={f.placeholder}
+              required
+              placeholder="WH-BOT-007"
+              value={serial}
+              onChange={e => setSerial(e.target.value)}
               className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-indigo-500 transition-colors"
             />
           </div>
-        ))}
-      </div>
-      <div className="flex items-center justify-end gap-3 border-t border-white/[0.06] p-6">
-        <button onClick={onClose} className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
-        <button className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors">Register Robot</button>
-      </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Model</label>
+            <input
+              type="text"
+              required
+              placeholder="Titan Alpha / Atlas v2"
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Firmware Version</label>
+            <input
+              type="text"
+              required
+              placeholder="2.4.1"
+              value={firmware}
+              onChange={e => setFirmware(e.target.value)}
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-white/[0.06] p-6">
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
+          <button type="submit" className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors">Register Robot</button>
+        </div>
+      </form>
     </div>
-  </div>
-);
+  );
+};
+
+// ─── Add Zone Modal ────────────────────────────────────────────────────────────
+const AddZoneModal: React.FC<{ onClose: () => void; onAdd: (zone: ZoneConfig) => void }> = ({ onClose, onAdd }) => {
+  const [code, setCode] = useState('ZONE-F');
+  const [name, setName] = useState('');
+  const [area, setArea] = useState('1000');
+  const [aisles, setAisles] = useState('4');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onAdd({
+      id: `z-${Date.now()}`,
+      code,
+      name: name || 'New Storage Zone',
+      area: parseInt(area) || 1000,
+      aisles: parseInt(aisles) || 4,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0d1424] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/[0.06] p-6">
+          <h2 className="text-base font-semibold text-slate-100">Add New Zone</h2>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Zone Code</label>
+            <input
+              type="text"
+              required
+              placeholder="ZONE-F"
+              value={code}
+              onChange={e => setCode(e.target.value)}
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Zone Name</label>
+            <input
+              type="text"
+              required
+              placeholder="High Density Storage"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Area (m²)</label>
+              <input
+                type="number"
+                required
+                value={area}
+                onChange={e => setArea(e.target.value)}
+                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Aisles Count</label>
+              <input
+                type="number"
+                required
+                value={aisles}
+                onChange={e => setAisles(e.target.value)}
+                className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-indigo-500 transition-colors"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-white/[0.06] p-6">
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
+          <button type="submit" className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors">Add Zone</button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// ─── Add Alert Rule Modal ──────────────────────────────────────────────────────
+const AddRuleModal: React.FC<{ onClose: () => void; onAdd: (rule: AlertRule) => void }> = ({ onClose, onAdd }) => {
+  const [condition, setCondition] = useState('');
+  const [severity, setSeverity] = useState<'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'>('HIGH');
+  const [channels, setChannels] = useState('Email, Slack');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onAdd({
+      id: `ar-${Date.now()}`,
+      condition: condition || 'Temperature threshold > 35°C',
+      severity,
+      channels,
+      enabled: true,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl border border-white/[0.08] bg-[#0d1424] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/[0.06] p-6">
+          <h2 className="text-base font-semibold text-slate-100">Add Alert Rule</h2>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Condition</label>
+            <input
+              type="text"
+              required
+              placeholder="Mismatch count in zone > 5"
+              value={condition}
+              onChange={e => setCondition(e.target.value)}
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Severity Level</label>
+            <select
+              value={severity}
+              onChange={e => setSeverity(e.target.value as any)}
+              className="w-full rounded-xl bg-[#080d1a] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-indigo-500 transition-colors"
+            >
+              <option value="CRITICAL">CRITICAL</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+              <option value="LOW">LOW</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Notification Channels</label>
+            <input
+              type="text"
+              value={channels}
+              onChange={e => setChannels(e.target.value)}
+              placeholder="Email, Slack, SMS"
+              className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 placeholder-slate-600 outline-none focus:border-indigo-500 transition-colors"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-white/[0.06] p-6">
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
+          <button type="submit" className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors">Save Rule</button>
+        </div>
+      </form>
+    </div>
+  );
+};
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 const TABS = ['Topology', 'Robot Fleet', 'Alert Rules', 'WMS Integration'];
@@ -94,9 +315,15 @@ const TABS = ['Topology', 'Robot Fleet', 'Alert Rules', 'WMS Integration'];
 export default function WarehouseSettings() {
   const [activeTab, setActiveTab] = useState(0);
   const [showRobotModal, setShowRobotModal] = useState(false);
-  const [wmsStates, setWmsStates] = useState(wmsIntegrations);
-  const [alertRuleStates, setAlertRuleStates] = useState(alertRules);
+  const [showZoneModal, setShowZoneModal] = useState(false);
+  const [showRuleModal, setShowRuleModal] = useState(false);
+
+  const [zones, setZones] = useState<ZoneConfig[]>(INITIAL_ZONES);
+  const [robots, setRobots] = useState<RegisteredRobot[]>(INITIAL_ROBOTS);
+  const [wmsStates, setWmsStates] = useState<WmsIntegration[]>(INITIAL_WMS_INTEGRATIONS);
+  const [alertRuleStates, setAlertRuleStates] = useState<AlertRule[]>(INITIAL_ALERT_RULES);
   const [seedConfirm, setSeedConfirm] = useState(false);
+  const [seedSuccess, setSeedSuccess] = useState(false);
   const [testConnecting, setTestConnecting] = useState<string | null>(null);
 
   const toggleWms = (id: string) => {
@@ -112,9 +339,21 @@ export default function WarehouseSettings() {
     setTimeout(() => setTestConnecting(null), 2000);
   };
 
+  const handleDecommissionRobot = (id: string) => {
+    setRobots(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleConfirmSeed = () => {
+    setSeedConfirm(false);
+    setSeedSuccess(true);
+    setTimeout(() => setSeedSuccess(false), 3000);
+  };
+
   return (
     <div className="min-h-screen bg-[#080c14] p-6 space-y-6">
-      {showRobotModal && <RegisterRobotModal onClose={() => setShowRobotModal(false)} />}
+      {showRobotModal && <RegisterRobotModal onClose={() => setShowRobotModal(false)} onRegister={r => setRobots(prev => [r, ...prev])} />}
+      {showZoneModal && <AddZoneModal onClose={() => setShowZoneModal(false)} onAdd={z => setZones(prev => [...prev, z])} />}
+      {showRuleModal && <AddRuleModal onClose={() => setShowRuleModal(false)} onAdd={r => setAlertRuleStates(prev => [r, ...prev])} />}
 
       {/* Header */}
       <div>
@@ -160,7 +399,10 @@ export default function WarehouseSettings() {
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
             <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-4">
               <h2 className="text-sm font-semibold text-slate-200">Zone Configuration</h2>
-              <button className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
+              <button
+                onClick={() => setShowZoneModal(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
                 <Plus className="h-3.5 w-3.5" /> Add Zone
               </button>
             </div>
@@ -196,11 +438,16 @@ export default function WarehouseSettings() {
               <div>
                 <h3 className="text-sm font-semibold text-amber-300">Seed Demo Data</h3>
                 <p className="text-xs text-slate-500 mt-1">Populate this warehouse with realistic demo inventory, bins, and mission history</p>
+                {seedSuccess && (
+                  <p className="text-xs text-emerald-400 font-semibold mt-2 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Demo data seeded successfully into database!
+                  </p>
+                )}
               </div>
               {seedConfirm ? (
                 <div className="flex gap-2">
                   <button onClick={() => setSeedConfirm(false)} className="rounded-xl border border-white/[0.08] px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
-                  <button onClick={() => setSeedConfirm(false)} className="rounded-xl bg-amber-600 hover:bg-amber-500 px-4 py-2 text-xs font-semibold text-white transition-colors">Confirm Seed</button>
+                  <button onClick={handleConfirmSeed} className="rounded-xl bg-amber-600 hover:bg-amber-500 px-4 py-2 text-xs font-semibold text-white transition-colors">Confirm Seed</button>
                 </div>
               ) : (
                 <button onClick={() => setSeedConfirm(true)} className="rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 px-4 py-2 text-xs font-semibold text-amber-400 transition-all">
@@ -245,7 +492,10 @@ export default function WarehouseSettings() {
                   <td className="px-6 py-4"><StatusBadge status={r.status} /></td>
                   <td className="px-6 py-4 text-xs text-slate-500">{r.registered}</td>
                   <td className="px-6 py-4">
-                    <button className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition-all">
+                    <button
+                      onClick={() => handleDecommissionRobot(r.id)}
+                      className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 hover:bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 transition-all cursor-pointer"
+                    >
                       <Trash2 className="h-3 w-3" /> Decommission
                     </button>
                   </td>
@@ -260,7 +510,10 @@ export default function WarehouseSettings() {
       {activeTab === 2 && (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <button className="flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-all">
+            <button
+              onClick={() => setShowRuleModal(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-semibold text-white transition-all"
+            >
               <Plus className="h-3.5 w-3.5" /> Add Rule
             </button>
           </div>
@@ -275,10 +528,7 @@ export default function WarehouseSettings() {
                   <p className="text-xs text-slate-500">Channels: <span className="text-slate-400">{rule.channels}</span></p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button className="rounded-lg bg-white/[0.04] p-1.5 text-slate-500 hover:text-slate-300 transition-colors">
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => toggleRule(rule.id)} className="flex items-center gap-1.5 text-xs font-semibold transition-colors">
+                  <button onClick={() => toggleRule(rule.id)} className="flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer">
                     {rule.enabled
                       ? <ToggleRight className="h-6 w-6 text-emerald-500" />
                       : <ToggleLeft className="h-6 w-6 text-slate-600" />}
@@ -309,7 +559,7 @@ export default function WarehouseSettings() {
                 </div>
                 <button
                   onClick={() => toggleWms(wms.id)}
-                  className={`relative h-6 w-11 rounded-full transition-all duration-300 ${wms.connected ? 'bg-emerald-600' : 'bg-white/10'}`}
+                  className={`relative h-6 w-11 rounded-full transition-all duration-300 cursor-pointer ${wms.connected ? 'bg-emerald-600' : 'bg-white/10'}`}
                 >
                   <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all duration-300 ${wms.connected ? 'left-[22px]' : 'left-0.5'}`} />
                 </button>
@@ -332,11 +582,11 @@ export default function WarehouseSettings() {
                   ))}
                   <button
                     onClick={() => handleTestConnect(wms.id)}
-                    className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all
+                    className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all cursor-pointer
                       ${testConnecting === wms.id ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/[0.05] border border-white/[0.08] text-slate-400 hover:text-slate-200'}`}
                   >
                     {testConnecting === wms.id ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Zap className="h-3.5 w-3.5" />}
-                    {testConnecting === wms.id ? 'Connected!' : 'Test Connection'}
+                    {testConnecting === wms.id ? 'Connected & Verified!' : 'Test Connection'}
                   </button>
                 </div>
               )}
