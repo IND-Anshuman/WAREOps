@@ -241,6 +241,8 @@ export const alertsApi = {
         zone_id: payload.zone_id || 'zone-A',
         bin_id: payload.bin_id || 'bin-01',
         bin_code: payload.bin_code || 'A1-R1-S1-B1',
+        expected_sku: payload.expected_sku,
+        image_url: payload.image_url,
         title: payload.title || 'User Reported Issue',
         description: payload.description || 'Inventory discrepancy reported by operator.',
         created_at: new Date().toISOString(),
@@ -274,10 +276,13 @@ export const missionsApi = {
         status: 'SCHEDULED',
         priority: payload.priority || 'MEDIUM',
         robot_id: payload.robot_id,
+        robot_name: payload.robot_name || 'WR-001 Argus',
         bins_total: payload.bins_total || 25,
         bins_scanned: 0,
         progress_percent: 0,
         created_at: new Date().toISOString(),
+        audit_scope: payload.audit_scope || 'ZONE',
+        target_scope_id: payload.target_scope_id || 'Zone A',
       };
       MOCK_MISSIONS.unshift(newMission);
       return newMission;
