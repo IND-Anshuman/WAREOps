@@ -457,3 +457,64 @@ export let MOCK_INVENTORY_ITEMS: InventoryItem[] = [
   { sku: 'SKU-FURN-002', name: 'Standing Desk 180cm', category: 'Furniture', location: 'A2-R1-S3-B2', status: 'MISMATCH', lastScanned: '10 min ago', confidence: 67 },
   { sku: 'SKU-BOOK-001', name: 'Clean Code - Robert Martin', category: 'Books', location: 'A3-R4-S1-B2', status: 'MISSING', lastScanned: '1 hour ago', confidence: 88 },
 ];
+
+// ─── Verification Observations DB Mock ─────────────────────────────────────────
+export interface PendingObservation {
+  id: string;
+  binCode: string;
+  expectedSku: string;
+  observedSku: string;
+  confidence: number;
+  time: string;
+  reason: string;
+  image_url: string;
+  status: 'PENDING' | 'ACCEPTED' | 'RESCAN_DISPATCHED' | 'DISCREPANCY_FLAGGED';
+}
+
+export let MOCK_OBSERVATIONS: PendingObservation[] = [
+  { 
+    id: 'obs-001', 
+    binCode: 'A1-R2-S3-B2', 
+    expectedSku: 'SKU-ELEC-002', 
+    observedSku: 'SKU-ELEC-001', 
+    confidence: 68, 
+    time: '3 min ago', 
+    reason: 'Low Scan Confidence',
+    image_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="350" viewBox="0 0 600 350" fill="none"><rect width="600" height="350" fill="%230f172a"/><rect x="40" y="40" width="520" height="270" rx="12" fill="%231e293b" stroke="%233b82f6" stroke-width="2" stroke-dasharray="6 6"/><rect x="180" y="90" width="240" height="150" rx="8" fill="%23334155" stroke="%23e2e8f0" stroke-width="2"/><rect x="220" y="110" width="160" height="60" fill="%2364748b"/><text x="300" y="145" text-anchor="middle" fill="%23f8fafc" font-family="monospace" font-size="14" font-weight="bold">SKU-ELEC-001</text><rect x="260" y="190" width="80" height="30" fill="%230f172a"/><path d="M270 195h10v20h-10zM285 195h5v20h-5zM295 195h15v20h-15zM315 195h10v20h-10z" fill="%2338bdf8"/><rect x="170" y="80" width="260" height="170" fill="none" stroke="%23eab308" stroke-width="3"/><text x="300" y="72" text-anchor="middle" fill="%23eab308" font-family="sans-serif" font-size="12" font-weight="bold">AI DETECT: 68% CONFIDENCE</text></svg>',
+    status: 'PENDING'
+  },
+  { 
+    id: 'obs-002', 
+    binCode: 'A2-R3-S1-B1', 
+    expectedSku: 'SKU-FURN-001', 
+    observedSku: 'SKU-FURN-001', 
+    confidence: 72, 
+    time: '12 min ago', 
+    reason: 'Blurry Frame Detected',
+    image_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="350" viewBox="0 0 600 350" fill="none"><rect width="600" height="350" fill="%23090d16"/><rect x="100" y="60" width="400" height="230" rx="8" fill="%231e293b" stroke="%23475569" stroke-width="2"/><circle cx="300" cy="175" r="70" fill="%23334155" opacity="0.6"/><text x="300" y="170" text-anchor="middle" fill="%23cbd5e1" font-family="monospace" font-size="16" font-weight="bold">SKU-FURN-001</text><text x="300" y="195" text-anchor="middle" fill="%23f59e0b" font-family="sans-serif" font-size="11">[BLUR DETECTED: 72%]</text></svg>',
+    status: 'PENDING'
+  },
+  { 
+    id: 'obs-003', 
+    binCode: 'A3-R1-S2-B2', 
+    expectedSku: 'SKU-BOOK-001', 
+    observedSku: 'None', 
+    confidence: 45, 
+    time: '40 min ago', 
+    reason: 'Missing Item Check',
+    image_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="350" viewBox="0 0 600 350" fill="none"><rect width="600" height="350" fill="%23020617"/><rect x="50" y="50" width="500" height="250" rx="10" fill="%230f172a" stroke="%23ef4444" stroke-width="2"/><text x="300" y="160" text-anchor="middle" fill="%23ef4444" font-family="sans-serif" font-size="18" font-weight="bold">EMPTY BIN DETECTED</text><text x="300" y="190" text-anchor="middle" fill="%2394a3b8" font-family="monospace" font-size="13">EXPECTED: SKU-BOOK-001</text></svg>',
+    status: 'PENDING'
+  },
+  { 
+    id: 'obs-004', 
+    binCode: 'A1-R4-S3-B1', 
+    expectedSku: 'SKU-ELEC-001', 
+    observedSku: 'SKU-WRONG-007', 
+    confidence: 55, 
+    time: '1 hour ago', 
+    reason: 'SKU Mismatch',
+    image_url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="350" viewBox="0 0 600 350" fill="none"><rect width="600" height="350" fill="%230f172a"/><rect x="120" y="70" width="360" height="210" rx="12" fill="%231e1b4b" stroke="%236366f1" stroke-width="2"/><rect x="200" y="110" width="200" height="120" rx="6" fill="%23312e81"/><text x="300" y="155" text-anchor="middle" fill="%23f43f5e" font-family="monospace" font-size="15" font-weight="bold">SKU-WRONG-007</text><text x="300" y="185" text-anchor="middle" fill="%23a5b4fc" font-family="sans-serif" font-size="11">EXPECTED: SKU-ELEC-001</text></svg>',
+    status: 'PENDING'
+  },
+];
+
