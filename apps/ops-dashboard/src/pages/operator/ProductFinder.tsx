@@ -1,15 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Search, MapPin, CheckCircle, RefreshCw, X, Download } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, MapPin, CheckCircle, RefreshCw, X, Download, CheckCircle2 } from 'lucide-react';
 import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { productsApi } from '../../api/client';
+import { productsApi, inventoryApi } from '../../api/client';
 import type { InventoryItem } from '../../api/mockData';
 
 export default function ProductFinder() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [rescanStatus, setRescanStatus] = useState<string | null>(null);
   
   const [products, setProducts] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +31,17 @@ export default function ProductFinder() {
     fetchProducts();
   }, []);
 
+  const handleRescan = async (location: string) => {
+    try {
+      await inventoryApi.requestRescan(location);
+      setRescanStatus(`Priority AMR rescan mission requested for bin ${location}`);
+      setTimeout(() => setRescanStatus(null), 3000);
+    } catch (e) {
+      console.error('Failed to request rescan:', e);
+      alert('Error requesting rescan');
+    }
+  };
+
   const filteredItems = useMemo(() => {
     return products.filter(item => {
       const matchesQuery = item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -40,8 +54,7 @@ export default function ProductFinder() {
     });
   }, [products, searchQuery, selectedCategory]);
 
-  if (loading) return <div className="p-12 text-center text-slate-400">Loading...</div>;
-
+  if (loading) return <div className="p-12 text-center text-slate-400">Loading product catalog...</div>;
 
   return (
     <div className="space-y-6">
@@ -63,6 +76,13 @@ export default function ProductFinder() {
           <Download className="h-4 w-4" /> Export CSV
         </Button>
       </div>
+
+      {rescanStatus && (
+        <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-sm flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-indigo-400" />
+          <span>{rescanStatus}</span>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <Card className="flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -146,10 +166,18 @@ export default function ProductFinder() {
               </div>
 
               <div className="flex items-center gap-3.5 pt-2">
-                <Button variant="secondary" className="flex-1 btn-sm">
+                <Button
+                  onClick={() => navigate(`/digital-twin?bin=${encodeURIComponent(item.location)}&sku=${encodeURIComponent(item.sku)}`)}
+                  variant="secondary"
+                  className="flex-1 btn-sm"
+                >
                   Show on Map
                 </Button>
-                <Button variant="ghost" className="btn-sm flex items-center gap-1.5 text-slate-400 hover:text-slate-200">
+                <Button
+                  onClick={() => handleRescan(item.location)}
+                  variant="ghost"
+                  className="btn-sm flex items-center gap-1.5 text-slate-400 hover:text-slate-200"
+                >
                   <RefreshCw className="w-3.5 h-3.5" /> Request Rescan
                 </Button>
               </div>
@@ -168,3 +196,4 @@ export default function ProductFinder() {
     </div>
   );
 }
+
