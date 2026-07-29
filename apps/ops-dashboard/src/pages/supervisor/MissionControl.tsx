@@ -61,18 +61,20 @@ export default function MissionControl() {
     setName(autoName);
   }, [auditScope, zone, targetAisle, targetRack, isNameCustom]);
 
-  const handleAction = (id: string, action: string) => {
-    setMissions(prev => prev.map(m => {
-      if (m.id === id) {
-        if (action === 'PAUSE') return { ...m, status: 'CANCELLED' }; 
-        if (action === 'RESUME') return { ...m, status: 'IN_PROGRESS' };
-        return m;
+  const handleAction = async (id: string, action: string) => {
+    try {
+      if (action === 'PAUSE') {
+        await missionsApi.pauseMission(id);
+      } else if (action === 'RESUME') {
+        await missionsApi.startMission(id);
       }
-      return m;
-    }));
+      await fetchMissionsAndRobots();
+    } catch (err) {
+      console.error('Failed to execute mission action:', err);
+    }
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Determine target bin count
@@ -96,25 +98,26 @@ export default function MissionControl() {
 
     const assignedRobot = robots.find(r => r.id === assignedRobotId);
 
-    const newMission = {
-      id: `mission-00${missions.length + 1}`,
-      name,
-      warehouse_id: 'wh-001',
-      robot_id: assignedRobotId,
-      robot_name: assignedRobot?.name || 'Unknown',
-      status: 'SCHEDULED' as const,
-      priority: priority as any,
-      progress_percent: 0,
-      bins_scanned: 0,
-      bins_total: binsTotal,
-      created_at: new Date().toISOString(),
-      audit_scope: auditScope,
-      target_scope_id: targetScopeId,
-    };
-    setMissions([newMission, ...missions]);
-    setIsModalOpen(false);
-    setName('');
-    setIsNameCustom(false);
+    try {
+      await missionsApi.createMission({
+        name,
+        warehouse_id: 'wh-001',
+        robot_id: assignedRobotId,
+        robot_name: assignedRobot?.name || 'Argus',
+        priority: priority as any,
+        bins_total: binsTotal,
+        audit_scope: auditScope,
+        target_scope_id: targetScopeId,
+      });
+
+      await fetchMissionsAndRobots();
+      setIsModalOpen(false);
+      setName('');
+      setIsNameCustom(false);
+    } catch (err) {
+      console.error('Failed to create mission:', err);
+      alert('Error scheduling audit mission.');
+    }
   };
 
   return (
