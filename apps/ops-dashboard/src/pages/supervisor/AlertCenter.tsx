@@ -4,7 +4,7 @@ import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { alertsApi } from '../../api/client';
+import { alertsApi, inventoryApi } from '../../api/client';
 import type { Alert } from '../../types';
 
 export default function AlertCenter() {
@@ -268,7 +268,7 @@ export default function AlertCenter() {
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Enter details of correction, e.g. Relocated to correct bin B2-R3..."
-                    className="w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none bg-white/04 border border-white/08 focus:border-indigo-500/50 transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl text-sm text-slate-100 outline-none bg-[#060b17] border border-white/14 focus:border-indigo-500 transition-all font-sans placeholder-slate-500"
                     required
                   />
                 </div>
@@ -278,8 +278,11 @@ export default function AlertCenter() {
                     type="button" 
                     variant="ghost" 
                     className="flex-1"
-                    onClick={() => {
-                      alert('Rescan task added for location ' + selectedAlert.bin_code);
+                    onClick={async () => {
+                      if (selectedAlert.bin_code) {
+                        await inventoryApi.requestRescan(selectedAlert.bin_code);
+                      }
+                      alert('Priority AMR rescan mission requested for location ' + (selectedAlert.bin_code || 'N/A'));
                       setSelectedAlert(null);
                     }}
                   >
@@ -292,8 +295,8 @@ export default function AlertCenter() {
               </form>
             ) : (
               <div className="pt-6 border-t border-white/06 text-xs space-y-2">
-                <span className="text-slate-400 block">Resolution Details:</span>
-                <p className="text-slate-300 font-semibold italic bg-white/02 p-3 rounded-lg border border-white/04">
+                <span className="text-slate-300 font-semibold uppercase tracking-wider text-[10px] block">Resolution Details</span>
+                <p className="text-slate-100 font-medium bg-[#060b17] p-3.5 rounded-xl border border-white/14 shadow-inner leading-relaxed font-sans">
                   {selectedAlert.resolution_notes || 'No resolution notes provided.'}
                 </p>
               </div>
