@@ -57,6 +57,7 @@ export interface Alert {
   bin_code?: string;
   expected_sku?: string;
   observed_sku?: string;
+  image_url?: string;
   title: string;
   description?: string;
   assigned_to?: string;
