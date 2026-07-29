@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Search, Trash2, Plus, CheckCircle2, MapPin, 
   RefreshCw, Camera, AlertCircle, Sparkles, Barcode, Trash,
-  ArrowDownLeft, ArrowUpRight, ShieldCheck, Loader2, Download
+  ArrowDownLeft, ArrowUpRight, ShieldCheck, Loader2, Download, Video, VideoOff, Scan
 } from 'lucide-react';
 import { exportToCsv } from '../../utils/exportCsv';
 import { Card } from '../../components/ui/Card';
@@ -29,10 +29,46 @@ export default function InventoryManagement() {
   const [selectedSkus, setSelectedSkus] = useState<string[]>([]);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'danger' } | null>(null);
 
-  // Scanner simulator state
+  // Scanner state & Real Camera WebRTC
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [scannerMode, setScannerMode] = useState<'inbound' | 'outbound'>('inbound');
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<any | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setIsCameraActive(true);
+      showToast('Camera feed activated. Point camera at product QR/barcode.');
+    } catch (err: any) {
+      console.error('Camera access error:', err);
+      setCameraError(err.message || 'Could not access camera. Please verify device permissions.');
+      showToast('Camera access denied or device unavailable.', 'danger');
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach((track) => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
 
   // Fetch products from backend DB
   const fetchProducts = async () => {
@@ -156,6 +192,46 @@ export default function InventoryManagement() {
       weight: 1.0
     }));
   }, [catalogItems]);
+
+  const scanCameraFrame = async () => {
+    setIsScanning(true);
+    try {
+      if ('BarcodeDetector' in window && videoRef.current) {
+        try {
+          const barcodeDetector = new (window as any).BarcodeDetector({
+            formats: ['qr_code', 'code_128', 'code_39', 'ean_13']
+          });
+          const barcodes = await barcodeDetector.detect(videoRef.current);
+          if (barcodes && barcodes.length > 0) {
+            const rawValue = barcodes[0].rawValue;
+            const matchedPreset = scannerMode === 'inbound'
+              ? INBOUND_PRESET_SCANS.find(p => p.sku === rawValue || rawValue.includes(p.sku))
+              : catalogItems.find(p => p.sku === rawValue || rawValue.includes(p.sku));
+            
+            const decoded = scannerMode === 'inbound'
+              ? (matchedPreset || { sku: rawValue, name: `Scanned Item (${rawValue})`, category: 'Electronics', location: 'A1-R1-S1-B1', weight: 2.0 })
+              : (matchedPreset || (catalogItems[0] || { sku: rawValue, name: `Scanned DB Item (${rawValue})`, category: 'General', location: 'A1-R1-S1-B1', weight: 1.0 }));
+
+            setScanResult(decoded);
+            showToast(`QR Code Decoded: ${rawValue}`);
+            setIsScanning(false);
+            return;
+          } else {
+            showToast('No QR code detected in camera frame. Align code inside box.', 'danger');
+            setIsScanning(false);
+            return;
+          }
+        } catch (e) {
+          console.warn('BarcodeDetector error', e);
+        }
+      }
+      showToast('No QR code detected in camera view. Please align code or click a preset below.', 'danger');
+      setIsScanning(false);
+    } catch (err) {
+      console.error('Scan camera error:', err);
+      setIsScanning(false);
+    }
+  };
 
   return (
     <div className="space-y-6 min-h-screen pb-12">
@@ -291,15 +367,21 @@ export default function InventoryManagement() {
                 </div>,
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/05 border border-white/08 text-slate-400 uppercase font-mono">{item.category}</span>,
                 <span className="font-mono text-xs text-indigo-300 font-semibold">{item.location}</span>,
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  item.status === 'VERIFIED' ? 'bg-emerald-500/10 text-emerald-400' :
-                  item.status === 'MISMATCH' ? 'bg-red-500/10 text-red-400' :
-                  'bg-orange-500/10 text-orange-400'
-                }`}>{item.status}</span>,
-                <span className="font-semibold text-slate-350">{item.confidence}%</span>
+                <span key={item.sku} className="text-xs text-slate-400 font-mono">{item.weight ? `${item.weight} kg` : 'N/A'}</span>,
+                <button
+                  key={item.sku}
+                  onClick={async () => {
+                    await productsApi.deleteProduct(item.sku);
+                    showToast(`Deleted ${item.sku}`, 'danger');
+                    await fetchProducts();
+                  }}
+                  className="p-1 text-slate-500 hover:text-red-400 transition-colors"
+                >
+                  <Trash className="h-4 w-4" />
+                </button>
               ])}
             />
-            {filteredItems.length === 0 && !loading && (
+            {filteredItems.length === 0 && (
               <div className="p-12 text-center text-slate-500 text-sm">
                 No catalog items match current filters.
               </div>
@@ -308,41 +390,78 @@ export default function InventoryManagement() {
         </div>
       )}
 
-      {/* TAB 2: Inbound/Outbound QR scanner simulation */}
+      {/* TAB 2: Inbound/Outbound QR scanner with Real WebRTC Camera */}
       {activeTab === 'scanner' && (
         <div className="space-y-6">
-          {/* Scanner Mode Selector */}
-          <div className="flex gap-4 items-center bg-white/[0.02] border border-white/[0.06] p-4 rounded-xl">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Scanner Operation Mode:</span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setScannerMode('inbound'); setScanResult(null); }}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold border transition-all duration-300
-                  ${scannerMode === 'inbound' 
-                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300' 
-                    : 'bg-white/02 border-white/06 text-slate-400 hover:bg-white/05'}`}
-              >
-                <ArrowDownLeft className="h-4 w-4" /> Inbound (Receive Inventory)
-              </button>
-              <button
-                onClick={() => { setScannerMode('outbound'); setScanResult(null); }}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold border transition-all duration-300
-                  ${scannerMode === 'outbound' 
-                    ? 'bg-red-500/10 border-red-500/40 text-red-300' 
-                    : 'bg-white/02 border-white/06 text-slate-400 hover:bg-white/05'}`}
-              >
-                <ArrowUpRight className="h-4 w-4" /> Outbound (Ship Inventory)
-              </button>
+          {/* Scanner Mode & Camera Control Bar */}
+          <div className="flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center bg-white/[0.02] border border-white/[0.06] p-4 rounded-xl">
+            <div className="flex gap-4 items-center">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Scanner Operation Mode:</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setScannerMode('inbound'); setScanResult(null); }}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold border transition-all duration-300
+                    ${scannerMode === 'inbound' 
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300' 
+                      : 'bg-white/02 border-white/06 text-slate-400 hover:bg-white/05'}`}
+                >
+                  <ArrowDownLeft className="h-4 w-4" /> Inbound (Receive Inventory)
+                </button>
+                <button
+                  onClick={() => { setScannerMode('outbound'); setScanResult(null); }}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold border transition-all duration-300
+                    ${scannerMode === 'outbound' 
+                      ? 'bg-red-500/10 border-red-500/40 text-red-300' 
+                      : 'bg-white/02 border-white/06 text-slate-400 hover:bg-white/05'}`}
+                >
+                  <ArrowUpRight className="h-4 w-4" /> Outbound (Ship Inventory)
+                </button>
+              </div>
+            </div>
+
+            {/* Camera WebRTC Toggle Button */}
+            <div className="flex items-center gap-2">
+              {isCameraActive ? (
+                <>
+                  <Button variant="secondary" onClick={scanCameraFrame} disabled={isScanning} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white">
+                    <Scan className="h-4 w-4 mr-1.5" /> Scan Live Camera Frame
+                  </Button>
+                  <Button variant="danger" onClick={stopCamera} className="text-xs">
+                    <VideoOff className="h-4 w-4 mr-1.5" /> Stop Camera
+                  </Button>
+                </>
+              ) : (
+                <Button variant="primary" onClick={startCamera} className="text-xs">
+                  <Video className="h-4 w-4 mr-1.5" /> Start User Camera Scanner
+                </Button>
+              )}
             </div>
           </div>
 
+          {cameraError && (
+            <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" /> {cameraError}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             
-            {/* Scanner Viewport */}
+            {/* Scanner Viewport with Real Video Feed */}
             <div className="lg:col-span-3 space-y-4">
               <Card className={`p-0 overflow-hidden relative border-white/[0.08] bg-slate-950 flex flex-col items-center justify-center min-h-[380px] group transition-all duration-500
                 ${scannerMode === 'outbound' ? 'ring-1 ring-red-500/20' : 'ring-1 ring-indigo-500/20'}`}>
                 
+                {/* Real Live Video Feed */}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+                    isCameraActive ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                />
+
                 {/* Scan overlays */}
                 <div className="absolute inset-0 z-10 flex flex-col justify-between pointer-events-none p-6">
                   <div className="flex justify-between items-center">
@@ -350,15 +469,21 @@ export default function InventoryManagement() {
                       <span className={`w-2 h-2 rounded-full ${
                         isScanning 
                           ? 'bg-red-500 animate-ping' 
-                          : scannerMode === 'outbound' ? 'bg-orange-500' : 'bg-emerald-500'}`} 
+                          : isCameraActive ? 'bg-emerald-400 animate-pulse' : scannerMode === 'outbound' ? 'bg-orange-500' : 'bg-emerald-500'}`} 
                       />
-                      {isScanning ? 'DECODING QR DATA' : scannerMode === 'outbound' ? 'OUTBOUND DOCK FEED' : 'INBOUND DOCK FEED'}
+                      {isScanning
+                        ? 'DECODING QR DATA'
+                        : isCameraActive
+                        ? 'LIVE WEBCAM STREAM ACTIVE'
+                        : scannerMode === 'outbound'
+                        ? 'OUTBOUND DOCK FEED'
+                        : 'INBOUND DOCK FEED'}
                     </div>
                     <Barcode className="h-4 w-4 text-slate-400" />
                   </div>
 
                   {/* Corners border indicators */}
-                  <div className="relative w-64 h-64 mx-auto self-center flex items-center justify-center">
+                  <div className="relative w-64 h-64 mx-auto self-center flex items-center justify-center pointer-events-auto">
                     {/* Laser sweep animation when active */}
                     {isScanning && (
                       <div className={`absolute left-0 w-full h-0.5 shadow-md z-20 animate-scan-sweep
@@ -375,28 +500,36 @@ export default function InventoryManagement() {
                     <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 rounded-br-xl transition-colors duration-500
                       ${scannerMode === 'outbound' ? 'border-red-500' : 'border-indigo-500'}`} />
                     
-                    {!isScanning && !scanResult && (
-                      <Camera className="h-10 w-10 text-white/10 group-hover:text-white/20 transition-all" />
+                    {!isScanning && !scanResult && !isCameraActive && (
+                      <button
+                        onClick={startCamera}
+                        className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-black/60 hover:bg-black/80 border border-white/10 transition-all cursor-pointer"
+                      >
+                        <Camera className="h-8 w-8 text-indigo-400 animate-pulse" />
+                        <span className="text-xs font-semibold text-slate-200">Click to Open Camera</span>
+                      </button>
                     )}
 
                     {/* Scanned Beep confirmation effect */}
                     {scanResult && !isScanning && (
                       <div className={`absolute inset-0 border rounded-xl flex items-center justify-center animate-pulse
-                        ${scannerMode === 'outbound' ? 'border-red-500 bg-red-500/5' : 'border-emerald-500 bg-emerald-500/5'}`}>
+                        ${scannerMode === 'outbound' ? 'border-red-500 bg-red-500/10' : 'border-emerald-500 bg-emerald-500/10'}`}>
                         <CheckCircle2 className={`h-10 w-10 ${scannerMode === 'outbound' ? 'text-red-400' : 'text-emerald-400'}`} />
                       </div>
                     )}
                   </div>
 
-                  <div className="text-center text-[10px] text-slate-500 uppercase tracking-widest bg-black/40 py-1.5 rounded-lg border border-white/04">
+                  <div className="text-center text-[10px] text-slate-400 uppercase tracking-widest bg-black/70 py-1.5 rounded-lg border border-white/06">
                     Dock Scanner ID: WH-{scannerMode === 'outbound' ? 'OUTBOUND' : 'INBOUND'}-QR-04
                   </div>
                 </div>
 
-                {/* Simulated camera static background */}
-                <div className={`absolute inset-0 transition-colors duration-500 ${scannerMode === 'outbound' ? 'bg-[#1a0a0a]' : 'bg-[#080d1a]'} overflow-hidden`}>
-                  <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[size:100%_4px,3px_100%]" />
-                </div>
+                {/* Fallback background when camera is disabled */}
+                {!isCameraActive && (
+                  <div className={`absolute inset-0 transition-colors duration-500 ${scannerMode === 'outbound' ? 'bg-[#1a0a0a]' : 'bg-[#080d1a]'} overflow-hidden`}>
+                    <div className="absolute inset-0 opacity-[0.03] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[size:100%_4px,3px_100%]" />
+                  </div>
+                )}
               </Card>
 
               {/* Simulated Scan presets */}
