@@ -4,6 +4,7 @@ import { Search, AlertTriangle, CheckCircle, MapPin, Activity, Bell } from 'luci
 import { Card } from '../../components/ui/Card';
 import { StatCard } from '../../components/ui/StatCard';
 import { alertsApi, missionsApi } from '../../api/client';
+import { observationsApi } from '../../api/observations';
 import type { Alert, Mission } from '../../types';
 
 export default function OperatorDashboard() {
@@ -11,17 +12,20 @@ export default function OperatorDashboard() {
 
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [pendingQueueCount, setPendingQueueCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [alertsData, missionsData] = await Promise.all([
+        const [alertsData, missionsData, queueData] = await Promise.all([
           alertsApi.getAlerts(),
-          missionsApi.getMissions()
+          missionsApi.getMissions(),
+          observationsApi.getPendingQueue()
         ]);
         setAlerts(alertsData);
         setMissions(missionsData);
+        setPendingQueueCount(queueData.length);
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
       } finally {
@@ -33,10 +37,10 @@ export default function OperatorDashboard() {
 
   if (loading) return <div className="p-12 text-center text-slate-400">Loading...</div>;
 
-  // Filter mock alerts for current operator's tasks
-  const pendingReviewsCount = 4;
-  const assignedAlertsCount = 2;
-  const zonesCoveredToday = 3;
+  // Dynamic calculations from DB/API data
+  const pendingReviewsCount = pendingQueueCount;
+  const assignedAlertsCount = alerts.filter(a => a.status === 'OPEN').length;
+  const zonesCoveredToday = new Set(missions.map(m => m.target_scope_id).filter(Boolean)).size || 3;
 
   return (
     <div className="space-y-6">
