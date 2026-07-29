@@ -1,17 +1,18 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Compass, Users, Clock, ArrowRight, Play, Eye } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { StatCard } from '../../components/ui/StatCard';
 import { Table } from '../../components/ui/Table';
-import { useState, useEffect } from 'react';
 import { alertsApi, missionsApi } from '../../api/client';
+import { MOCK_TEAM } from '../../api/mockData';
 import type { Alert, Mission } from '../../types';
 
 export default function SupervisorDashboard() {
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [team, setTeam] = useState(MOCK_TEAM);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,8 +36,8 @@ export default function SupervisorDashboard() {
 
   const openAlerts = alerts.filter(a => a.status === 'OPEN').length;
   const activeMissions = missions.filter(m => m.status === 'IN_PROGRESS').length;
-  const onlineOperators = 3;
-  const avgResponseTime = '28 min';
+  const onlineOperators = team.filter(t => t.status === 'ONLINE').length;
+  const avgResponseTime = `${Math.round(team.reduce((acc, t) => acc + t.avg_response_time_min, 0) / (team.length || 1))} min`;
 
   return (
     <div className="space-y-6">
@@ -126,28 +127,24 @@ export default function SupervisorDashboard() {
           </div>
 
           <Card className="space-y-4">
-            {[
-              { name: 'John Doe', status: 'Online', task: 'Reviewing Bin A1-R2', time: 'Active now' },
-              { name: 'Alice Smith', status: 'Online', task: 'Idle', time: '5m ago' },
-              { name: 'Bob Johnson', status: 'Offline', task: 'On break', time: '1h ago' }
-            ].map((op, idx) => (
-              <div key={idx} className="flex items-center justify-between pb-3.5 border-b border-white/06 last:border-0 last:pb-0">
+            {team.map((op) => (
+              <div key={op.id} className="flex items-center justify-between pb-3.5 border-b border-white/06 last:border-0 last:pb-0">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-white/06 flex items-center justify-center font-bold text-xs text-indigo-300">
-                    {op.name.split(' ').map(n => n[0]).join('')}
+                    {op.display_name.split(' ').map(n => n[0]).join('')}
                   </div>
                   <div>
-                    <h4 className="text-sm font-semibold text-slate-200">{op.name}</h4>
-                    <p className="text-xs text-slate-400">{op.task}</p>
+                    <h4 className="text-sm font-semibold text-slate-200">{op.display_name}</h4>
+                    <p className="text-xs text-slate-400">{op.last_action || 'Idle'}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${
-                    op.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/04 text-slate-400'
+                    op.status === 'ONLINE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/04 text-slate-400'
                   }`}>
                     {op.status}
                   </span>
-                  <span className="text-[10px] text-slate-500 block mt-0.5">{op.time}</span>
+                  <span className="text-[10px] text-slate-500 block mt-0.5">{op.pending_tasks} pending</span>
                 </div>
               </div>
             ))}
