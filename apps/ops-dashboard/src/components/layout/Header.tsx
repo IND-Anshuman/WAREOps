@@ -23,13 +23,16 @@ export function Header() {
 
   return (
     <header 
-      className="fixed top-0 right-0 h-16 z-20 border-b border-white/06 bg-slate-950/80 backdrop-blur-md px-6 flex items-center justify-between transition-all duration-300"
-      style={{ left: sidebarCollapsed ? '64px' : '240px' }}
+      className="fixed top-0 left-0 right-0 h-16 z-20 border-b border-white/08 bg-[#070b16]/90 backdrop-blur-xl px-6 flex items-center justify-between transition-all duration-300 shadow-lg"
     >
       <div className="flex items-center space-x-3">
-        <span className="text-xs rounded-full bg-indigo-500/10 px-2.5 py-0.5 font-medium text-indigo-400">
-          Warehouse: wh-001 (Main Fulfilment)
-        </span>
+        <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-mono font-black text-sm shadow-lg shadow-indigo-500/20">
+          W
+        </div>
+        <div>
+          <span className="text-sm font-bold text-slate-100 tracking-tight font-mono">WAREOps OS</span>
+          <span className="text-[10px] text-slate-400 block font-mono">Autonomous Warehouse Intelligence</span>
+        </div>
       </div>
 
       <div className="flex items-center space-x-4">

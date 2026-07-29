@@ -30,96 +30,38 @@ import {
 } from 'lucide-react';
 import { FluidIslandNavbar } from '../components/landing/FluidIslandNavbar';
 import { EnterpriseFooter } from '../components/landing/EnterpriseFooter';
+import { KnowTheBotSection } from '../components/landing/KnowTheBotSection';
 
-// TEAM MEMBERS DATA (5 Core Engineers)
+// TEAM MEMBERS DATA (5 Core Engineers - Minimal Impeccable Format)
 const TEAM_MEMBERS = [
   {
     id: 'anshuman',
     name: 'Anshuman Singh',
     initials: 'AS',
-    role: 'Backend & Systems Architect',
-    tagline: 'Backend Microservices & Frontend Core',
-    bio: 'Architected the core backend microservices, transactional event bus, relational schemas, and contributed key parts of the frontend platform interface.',
-    specialties: [
-      'FastAPI Microservices', 
-      'PostgreSQL Partitioning', 
-      'SQLAlchemy ORM', 
-      'Outbox Event Pattern', 
-      'REST API Design', 
-      'Frontend Integration', 
-      'Docker Containers',
-      'Database Migrations'
-    ],
     badge: 'Lead Software Architect'
   },
   {
     id: 'utkarsh',
     name: 'Utkarsh Kumar',
     initials: 'UK',
-    role: 'Frontend Architect & Robotics Engineer',
-    tagline: 'Frontend Platform & Robotics Integration',
-    bio: 'Engineered the majority of the frontend application interface, interactive spatial components, and contributed directly to autonomous robotics integrations.',
-    specialties: [
-      'Frontend Architecture', 
-      'Spatial Digital Twin', 
-      'Robotics Contribution',
-      'Tailwind & Modern CSS',
-      'TypeScript UI Components',
-      'WebSocket Real-time State'
-    ],
     badge: 'Frontend & Robotics'
   },
   {
     id: 'abhinav',
     name: 'Abhinav Goel',
     initials: 'AG',
-    role: 'Lead Robotics Architect',
-    tagline: 'ROS 2, SLAM & Autonomous Navigation',
-    bio: 'Lead robotics architect responsible for designing the ROS 2 node architecture, LiDAR SLAM mapping, and path planning algorithms for autonomous movement.',
-    specialties: [
-      'ROS 2 Navigation2', 
-      'LiDAR SLAM Mapping', 
-      'Autonomous Pathfinding', 
-      'Wheel Odometry Telemetry', 
-      'Obstacle Avoidance', 
-      'TF2 Static Transforms', 
-      'Kinematic Controllers', 
-      'Gazebo Simulation'
-    ],
     badge: 'Lead Robotics Architect'
   },
   {
     id: 'alok',
     name: 'Alok Kumar Mishra',
     initials: 'AM',
-    role: 'Deployment & Vision Systems Engineer',
-    tagline: 'Software Deployment & OpenCV QR Processing',
-    bio: 'Deployed the complete software platform and engineered the OpenCV computer vision backend pipeline for real-time optical QR processing.',
-    specialties: [
-      'Software Deployment', 
-      'OpenCV Vision Backend', 
-      'QR Code Processing',
-      'Docker Containerization',
-      'Edge Camera Integration',
-      'CI/CD Deployment Pipelines'
-    ],
     badge: 'Deployment & OpenCV'
   },
   {
     id: 'anshu',
     name: 'Anshu Kashyap',
     initials: 'AK',
-    role: 'Application Development Lead',
-    tagline: 'WAREOps App & Platform Experience',
-    bio: 'Responsible for designing and developing the core WAREOps application experience, operational workflows, and mobile/web application features.',
-    specialties: [
-      'WAREOps App Dev', 
-      'User Experience', 
-      'Operational Workflows',
-      'Mobile Cross-Platform Dev',
-      'Role-based UI Navigation',
-      'Client-side Cache Management'
-    ],
     badge: 'App Architect'
   }
 ];
@@ -544,7 +486,10 @@ export default function OnboardingPage() {
         </div>
       </section>
 
-      {/* SECTION 4: TEAM INTRODUCTION */}
+      {/* SECTION 4: KNOW THE BOT HARDWARE & SOFTWARE ARCHITECTURE */}
+      <KnowTheBotSection />
+
+      {/* SECTION 5: TEAM INTRODUCTION */}
       <section id="team" className="relative z-10 py-24 px-4 max-w-6xl mx-auto border-t border-white/[0.06]">
         <div className="space-y-16">
           
@@ -561,125 +506,69 @@ export default function OnboardingPage() {
             </p>
           </div>
 
-          {/* Team Members Layout: Row 1 (3 Members), Row 2 Centered (2 Members) */}
-          <div className="space-y-8">
+          {/* Team Members Layout: Row 1 (3 Members), Row 2 Centered (2 Members) with 3D Perspective Depth */}
+          <div className="space-y-6">
             {/* Row 1: 3 Core Architects */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {TEAM_MEMBERS.slice(0, 3).map((member) => (
-                <div
-                  key={member.id}
-                  className="group relative p-6 rounded-3xl bg-slate-900/60 border border-white/10 hover:border-indigo-500/40 transition-all duration-300 flex flex-col justify-between space-y-6 hover:shadow-xl hover:shadow-indigo-500/10"
-                >
-                  <div className="space-y-4">
-                    {/* Initials Badge Header */}
-                    <div className="flex items-center justify-between">
-                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600/30 to-purple-600/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-200 font-mono font-black text-lg shadow-lg shadow-indigo-500/20 group-hover:border-indigo-400 group-hover:scale-105 transition-all">
+                <div key={member.id} className="perspective-[1000px] group">
+                  <div className="relative p-7 rounded-2xl bg-gradient-to-b from-[#0b1328]/90 via-[#080d1a]/95 to-[#060913] border border-white/10 group-hover:border-indigo-500/60 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] [transform-style:preserve-3d] group-hover:[-translate-y-2] group-hover:[rotateX(4deg)] group-hover:[rotateY(-2deg)] group-hover:scale-[1.02] shadow-[0_15px_35px_rgba(0,0,0,0.6)] group-hover:shadow-[0_25px_60px_rgba(99,102,241,0.25)] backdrop-blur-2xl overflow-hidden flex flex-col justify-between min-h-[160px]">
+                    
+                    {/* Ambient 3D Neon Backlight Aura */}
+                    <div className="absolute -top-12 -right-12 w-36 h-36 rounded-full bg-indigo-500/20 blur-2xl group-hover:bg-indigo-500/40 group-hover:scale-150 transition-all duration-700 pointer-events-none" />
+                    <div className="absolute -bottom-10 -left-10 w-28 h-28 rounded-full bg-cyan-500/10 blur-2xl group-hover:bg-cyan-500/30 transition-all duration-700 pointer-events-none" />
+
+                    {/* 3D Floating Header Row (Z-Layer 2) */}
+                    <div className="flex items-center justify-between w-full [transform:translateZ(20px)] transition-transform duration-300">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600/30 to-purple-600/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-200 font-mono font-black text-lg shadow-lg shadow-indigo-500/25 group-hover:border-indigo-400 group-hover:shadow-indigo-500/40 transition-all">
                         {member.initials}
                       </div>
-                      <span className="px-3 py-1 rounded-full text-[10px] font-mono font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-300">
+                      <span className="px-3.5 py-1.5 rounded-full text-[10px] font-mono font-extrabold tracking-widest uppercase bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 shadow-md backdrop-blur-md group-hover:border-indigo-400 transition-colors">
                         {member.badge}
                       </span>
                     </div>
 
-                    {/* Name & Role */}
-                    <div>
-                      <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition-colors">
+                    {/* 3D Floating Name Title (Z-Layer 3) */}
+                    <div className="[transform:translateZ(30px)] transition-transform duration-300 pt-3">
+                      <h3 className="text-xl font-extrabold text-white group-hover:text-indigo-200 transition-colors font-sans tracking-tight drop-shadow-md">
                         {member.name}
                       </h3>
-                      <p className="text-xs font-mono text-cyan-400">{member.role}</p>
-                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">{member.tagline}</p>
+                      <div className="w-8 h-0.5 rounded-full bg-indigo-500/40 group-hover:w-16 group-hover:bg-cyan-400 transition-all duration-500 mt-2" />
                     </div>
 
-                    {/* Bio */}
-                    <p className="text-xs text-slate-300 leading-relaxed font-sans">
-                      {member.bio}
-                    </p>
-                  </div>
-
-                  {/* Specialties Tags */}
-                  <div className="space-y-4 pt-4 border-t border-white/06">
-                    <div className="flex flex-wrap gap-1.5">
-                      {member.specialties.map((spec, i) => (
-                        <span
-                          key={i}
-                          className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.04] text-slate-300 border border-white/06"
-                        >
-                          {spec}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-                      <span className="flex items-center gap-1.5 text-emerald-400">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Core Team Member
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-indigo-400 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                          {member.initials}
-                        </span>
-                      </div>
-                    </div>
                   </div>
                 </div>
               ))}
             </div>
 
             {/* Row 2: 2 Core Engineers (Centered) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
               {TEAM_MEMBERS.slice(3, 5).map((member) => (
-                <div
-                  key={member.id}
-                  className="group relative p-6 rounded-3xl bg-slate-900/60 border border-white/10 hover:border-indigo-500/40 transition-all duration-300 flex flex-col justify-between space-y-6 hover:shadow-xl hover:shadow-indigo-500/10"
-                >
-                  <div className="space-y-4">
-                    {/* Initials Badge Header */}
-                    <div className="flex items-center justify-between">
-                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600/30 to-purple-600/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-200 font-mono font-black text-lg shadow-lg shadow-indigo-500/20 group-hover:border-indigo-400 group-hover:scale-105 transition-all">
+                <div key={member.id} className="perspective-[1000px] group">
+                  <div className="relative p-7 rounded-2xl bg-gradient-to-b from-[#0b1328]/90 via-[#080d1a]/95 to-[#060913] border border-white/10 group-hover:border-indigo-500/60 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] [transform-style:preserve-3d] group-hover:[-translate-y-2] group-hover:[rotateX(4deg)] group-hover:[rotateY(-2deg)] group-hover:scale-[1.02] shadow-[0_15px_35px_rgba(0,0,0,0.6)] group-hover:shadow-[0_25px_60px_rgba(99,102,241,0.25)] backdrop-blur-2xl overflow-hidden flex flex-col justify-between min-h-[160px]">
+                    
+                    {/* Ambient 3D Neon Backlight Aura */}
+                    <div className="absolute -top-12 -right-12 w-36 h-36 rounded-full bg-indigo-500/20 blur-2xl group-hover:bg-indigo-500/40 group-hover:scale-150 transition-all duration-700 pointer-events-none" />
+                    <div className="absolute -bottom-10 -left-10 w-28 h-28 rounded-full bg-cyan-500/10 blur-2xl group-hover:bg-cyan-500/30 transition-all duration-700 pointer-events-none" />
+
+                    {/* 3D Floating Header Row (Z-Layer 2) */}
+                    <div className="flex items-center justify-between w-full [transform:translateZ(20px)] transition-transform duration-300">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600/30 to-purple-600/30 border-2 border-indigo-500/40 flex items-center justify-center text-indigo-200 font-mono font-black text-lg shadow-lg shadow-indigo-500/25 group-hover:border-indigo-400 group-hover:shadow-indigo-500/40 transition-all">
                         {member.initials}
                       </div>
-                      <span className="px-3 py-1 rounded-full text-[10px] font-mono font-semibold bg-indigo-500/10 border border-indigo-500/30 text-indigo-300">
+                      <span className="px-3.5 py-1.5 rounded-full text-[10px] font-mono font-extrabold tracking-widest uppercase bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 shadow-md backdrop-blur-md group-hover:border-indigo-400 transition-colors">
                         {member.badge}
                       </span>
                     </div>
 
-                    {/* Name & Role */}
-                    <div>
-                      <h3 className="text-xl font-bold text-white group-hover:text-indigo-300 transition-colors">
+                    {/* 3D Floating Name Title (Z-Layer 3) */}
+                    <div className="[transform:translateZ(30px)] transition-transform duration-300 pt-3">
+                      <h3 className="text-xl font-extrabold text-white group-hover:text-indigo-200 transition-colors font-sans tracking-tight drop-shadow-md">
                         {member.name}
                       </h3>
-                      <p className="text-xs font-mono text-cyan-400">{member.role}</p>
-                      <p className="text-[11px] font-mono text-slate-400 mt-0.5">{member.tagline}</p>
+                      <div className="w-8 h-0.5 rounded-full bg-indigo-500/40 group-hover:w-16 group-hover:bg-cyan-400 transition-all duration-500 mt-2" />
                     </div>
 
-                    {/* Bio */}
-                    <p className="text-xs text-slate-300 leading-relaxed font-sans">
-                      {member.bio}
-                    </p>
-                  </div>
-
-                  {/* Specialties Tags */}
-                  <div className="space-y-4 pt-4 border-t border-white/06">
-                    <div className="flex flex-wrap gap-1.5">
-                      {member.specialties.map((spec, i) => (
-                        <span
-                          key={i}
-                          className="px-2 py-0.5 rounded text-[10px] font-mono bg-white/[0.04] text-slate-300 border border-white/06"
-                        >
-                          {spec}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
-                      <span className="flex items-center gap-1.5 text-emerald-400">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Core Team Member
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-indigo-400 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                          {member.initials}
-                        </span>
-                      </div>
-                    </div>
                   </div>
                 </div>
               ))}
