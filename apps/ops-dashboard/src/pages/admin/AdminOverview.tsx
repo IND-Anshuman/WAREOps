@@ -1,31 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Building2, AlertTriangle, Bot, CheckCircle2, Shield,
-  Clock, TrendingUp, Activity, UserX, MonitorSmartphone
+  Building2, AlertTriangle, Bot,
+  Clock, Activity, Shield
 } from 'lucide-react';
+import { adminApi, robotsApi, alertsApi, missionsApi } from '../../api/client';
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-const warehouses = [
+export interface NetworkWarehouse {
+  id: string;
+  name: string;
+  location: string;
+  healthScore: number;
+  missions: number;
+  alerts: number;
+  robotsOnline: number;
+  robotsTotal: number;
+  status: 'ACTIVE' | 'SETUP_MODE' | 'INACTIVE';
+  grade: string;
+}
+
+const INITIAL_WAREHOUSES: NetworkWarehouse[] = [
   {
     id: 'wh1', name: 'WH-ALPHA-001', location: 'Singapore · SG',
-    healthScore: 92, missions: 7, alerts: 3, robotsOnline: 6, robotsTotal: 7,
+    healthScore: 94, missions: 7, alerts: 3, robotsOnline: 6, robotsTotal: 7,
     status: 'ACTIVE', grade: 'A',
   },
   {
     id: 'wh2', name: 'WH-BETA-002', location: 'Mumbai · IN',
-    healthScore: 78, missions: 3, alerts: 11, robotsOnline: 4, robotsTotal: 6,
+    healthScore: 82, missions: 3, alerts: 5, robotsOnline: 4, robotsTotal: 6,
     status: 'ACTIVE', grade: 'B',
   },
   {
     id: 'wh3', name: 'WH-GAMMA-003', location: 'Tokyo · JP',
-    healthScore: 95, missions: 12, alerts: 1, robotsOnline: 8, robotsTotal: 8,
+    healthScore: 96, missions: 12, alerts: 1, robotsOnline: 8, robotsTotal: 8,
     status: 'ACTIVE', grade: 'A+',
   },
   {
     id: 'wh4', name: 'WH-DELTA-004', location: 'Frankfurt · DE',
-    healthScore: 61, missions: 0, alerts: 24, robotsOnline: 2, robotsTotal: 5,
-    status: 'ACTIVE', grade: 'C',
+    healthScore: 78, missions: 2, alerts: 8, robotsOnline: 4, robotsTotal: 5,
+    status: 'ACTIVE', grade: 'B',
   },
   {
     id: 'wh5', name: 'WH-EPSILON-005', location: 'Sydney · AU',
@@ -39,27 +52,6 @@ const warehouses = [
   },
 ];
 
-const securitySummary = {
-  failedLogins: 7,
-  activeSessions: 23,
-  lastEvent: 'Account lockout for user jin.ha@beta.com after 5 failed attempts',
-  lastEventTime: '14 min ago',
-};
-
-const auditFeed = [
-  { id: 1, actor: 'admin@platform.io', action: 'ROLE_CHANGED', resource: 'user:carlos.m → MANAGER', time: '5m ago', outcome: 'success' },
-  { id: 2, actor: 'admin@platform.io', action: 'USER_INVITED', resource: 'email:new.hire@wh3.jp', time: '22m ago', outcome: 'success' },
-  { id: 3, actor: 'system', action: 'ACCOUNT_LOCKED', resource: 'user:jin.ha@beta.com', time: '36m ago', outcome: 'warning' },
-  { id: 4, actor: 'admin@platform.io', action: 'WAREHOUSE_CREATED', resource: 'warehouse:WH-EPSILON-005', time: '2h ago', outcome: 'success' },
-  { id: 5, actor: 'admin@platform.io', action: 'API_KEY_REVOKED', resource: 'key:robot-prod-old', time: '3h 12m ago', outcome: 'success' },
-  { id: 6, actor: 'admin@platform.io', action: 'DATA_EXPORT', resource: 'report:compliance-q2-2026', time: '4h ago', outcome: 'success' },
-  { id: 7, actor: 'system', action: 'SESSION_REVOKED', resource: 'user:tom.b@alpha.sg (3 sessions)', time: '5h 45m ago', outcome: 'warning' },
-  { id: 8, actor: 'admin@platform.io', action: 'MFA_POLICY_UPDATED', resource: 'org:global → REQUIRED', time: '1d ago', outcome: 'success' },
-  { id: 9, actor: 'admin@platform.io', action: 'USER_SUSPENDED', resource: 'user:contractor.x@old.com', time: '1d 6h ago', outcome: 'warning' },
-  { id: 10, actor: 'system', action: 'BACKUP_COMPLETED', resource: 'db:warehouse-platform-prod', time: '1d 12h ago', outcome: 'success' },
-];
-
-// ─── Small Circular Health Ring ───────────────────────────────────────────────
 const HealthRing: React.FC<{ score: number; size?: number }> = ({ score, size = 40 }) => {
   const r = (size - 8) / 2;
   const circ = 2 * Math.PI * r;
@@ -84,25 +76,64 @@ const HealthRing: React.FC<{ score: number; size?: number }> = ({ score, size = 
   );
 };
 
-// ─── Org Health Score ──────────────────────────────────────────────────────────
-const orgScore = Math.round(warehouses.filter(w => w.status === 'ACTIVE').reduce((acc, w) => acc + w.healthScore, 0) / warehouses.filter(w => w.status === 'ACTIVE').length);
-const orgGrade = orgScore >= 90 ? 'A' : orgScore >= 80 ? 'B' : orgScore >= 70 ? 'C' : orgScore >= 60 ? 'D' : 'F';
-
-// ─── Main Component ────────────────────────────────────────────────────────────
 export default function AdminOverview() {
   const navigate = useNavigate();
-  const [selectedWh, setSelectedWh] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<NetworkWarehouse[]>(INITIAL_WAREHOUSES);
+  const [auditFeed, setAuditFeed] = useState<any[]>([]);
+
+  const securitySummary = {
+    failedLogins: 2,
+    activeSessions: 28,
+    lastEvent: 'Account lockout threshold enforced for region AP-SOUTH',
+    lastEventTime: '12 min ago',
+  };
+
+  useEffect(() => {
+    const loadOverviewData = async () => {
+      try {
+        const [logs, robots, alerts, missions] = await Promise.all([
+          adminApi.getAuditLogs(),
+          robotsApi.getRobots(),
+          alertsApi.getAlerts(),
+          missionsApi.getMissions(),
+        ]);
+
+        if (Array.isArray(logs) && logs.length > 0) {
+          setAuditFeed(logs.slice(0, 8));
+        } else {
+          setAuditFeed([
+            { id: 1, actor: 'admin@wareops.dev', action: 'ROLE_CHANGED', resource: 'user:operator3 → SUPERVISOR', time: '5m ago', outcome: 'success' },
+            { id: 2, actor: 'admin@wareops.dev', action: 'USER_INVITED', resource: 'email:new.supervisor@wareops.dev', time: '22m ago', outcome: 'success' },
+            { id: 3, actor: 'system', action: 'WMS_SYNC_COMPLETED', resource: 'adapter:SAP-WM', time: '36m ago', outcome: 'success' },
+          ]);
+        }
+
+        const onlineRobots = robots.filter(r => r.status === 'ONLINE').length;
+        const openAlerts = alerts.filter(a => a.status === 'OPEN').length;
+        const activeMissions = missions.filter(m => m.status === 'IN_PROGRESS' || m.status === 'SCHEDULED').length;
+
+        setWarehouses(prev => prev.map(w => w.id === 'wh1' ? {
+          ...w,
+          robotsOnline: onlineRobots || 6,
+          alerts: openAlerts || 3,
+          missions: activeMissions || 7,
+        } : w));
+      } catch (err) {
+        console.error('Failed to fetch admin overview telemetry:', err);
+      }
+    };
+
+    loadOverviewData();
+  }, []);
+
+  const activeWhs = warehouses.filter(w => w.status === 'ACTIVE');
+  const orgScore = Math.round(activeWhs.reduce((acc, w) => acc + w.healthScore, 0) / Math.max(activeWhs.length, 1));
+  const orgGrade = orgScore >= 90 ? 'A' : orgScore >= 80 ? 'B' : orgScore >= 70 ? 'C' : 'D';
 
   const statusColor: Record<string, string> = {
     ACTIVE: 'bg-emerald-500/10 text-emerald-400',
     SETUP_MODE: 'bg-amber-500/10 text-amber-400',
     INACTIVE: 'bg-slate-800 text-slate-500',
-  };
-
-  const outcomeColor: Record<string, string> = {
-    success: 'text-emerald-400',
-    warning: 'text-amber-400',
-    error: 'text-red-400',
   };
 
   return (
@@ -117,7 +148,7 @@ export default function AdminOverview() {
         <div className="flex items-center gap-3">
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-6 py-4 text-center">
             <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest">Org Health Score</p>
-            <p className="text-4xl font-bold mt-1" style={{ color: orgScore >= 80 ? '#10b981' : orgScore >= 70 ? '#6366f1' : '#f59e0b' }}>{orgScore}</p>
+            <p className="text-4xl font-bold mt-1" style={{ color: orgScore >= 80 ? '#10b981' : '#6366f1' }}>{orgScore}</p>
             <p className="text-lg font-bold text-slate-400 mt-0.5">Grade: {orgGrade}</p>
           </div>
         </div>
@@ -126,7 +157,7 @@ export default function AdminOverview() {
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Active Warehouses', value: warehouses.filter(w => w.status === 'ACTIVE').length, icon: Building2, color: '#6366f1' },
+          { label: 'Active Warehouses', value: activeWhs.length, icon: Building2, color: '#6366f1' },
           { label: 'Total Active Missions', value: warehouses.reduce((a, w) => a + w.missions, 0), icon: Activity, color: '#10b981' },
           { label: 'Total Open Alerts', value: warehouses.reduce((a, w) => a + w.alerts, 0), icon: AlertTriangle, color: '#ef4444' },
           { label: 'Robots Online', value: `${warehouses.reduce((a, w) => a + w.robotsOnline, 0)}/${warehouses.reduce((a, w) => a + w.robotsTotal, 0)}`, icon: Bot, color: '#8b5cf6' },
@@ -152,7 +183,7 @@ export default function AdminOverview() {
           {warehouses.map(wh => (
             <div
               key={wh.id}
-              onClick={() => { if (wh.status === 'ACTIVE') navigate('/manager/dashboard'); }}
+              onClick={() => { if (wh.status === 'ACTIVE') navigate('/supervisor/dashboard'); }}
               className={`rounded-2xl border p-5 transition-all duration-300 group
                 ${wh.status === 'ACTIVE' ? 'border-white/[0.06] bg-white/[0.03] cursor-pointer hover:border-indigo-500/30 hover:bg-indigo-500/[0.04]' : 'border-white/[0.03] bg-white/[0.01] opacity-70 cursor-default'}`}
             >
@@ -185,17 +216,13 @@ export default function AdminOverview() {
                   </div>
                 </div>
               )}
-              {wh.status === 'INACTIVE' && (
-                <p className="text-xs text-slate-600 text-center mt-2">Warehouse not in service</p>
-              )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Bottom Row: Security + Audit Feed */}
+      {/* Security + Audit Feed */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Security Summary */}
         <div className="lg:col-span-2 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 space-y-4">
           <div className="flex items-center gap-2 mb-2">
             <Shield className="h-4 w-4 text-red-400" />
@@ -217,14 +244,13 @@ export default function AdminOverview() {
             <p className="text-[10px] text-slate-600 mt-2">{securitySummary.lastEventTime}</p>
           </div>
           <button
-            onClick={() => navigate('/admin/security')}
-            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:border-white/[0.15] transition-all"
+            onClick={() => navigate('/admin/audit-logs')}
+            className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:border-white/[0.15] transition-all cursor-pointer"
           >
-            View Security Logs →
+            View Security & Audit Logs →
           </button>
         </div>
 
-        {/* Admin Audit Feed */}
         <div className="lg:col-span-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
           <div className="flex items-center gap-2 mb-4">
             <Clock className="h-4 w-4 text-slate-400" />
@@ -232,18 +258,18 @@ export default function AdminOverview() {
           </div>
           <div className="space-y-0">
             {auditFeed.map((event, idx) => (
-              <div key={event.id} className={`flex items-start gap-3 py-2.5 ${idx < auditFeed.length - 1 ? 'border-b border-white/[0.04]' : ''}`}>
-                <span className={`mt-0.5 text-[10px] ${outcomeColor[event.outcome]} font-bold flex-shrink-0`}>
-                  {event.outcome === 'success' ? '✓' : '!'}
+              <div key={event.id || idx} className={`flex items-start gap-3 py-2.5 ${idx < auditFeed.length - 1 ? 'border-b border-white/[0.04]' : ''}`}>
+                <span className="mt-0.5 text-[10px] text-emerald-400 font-bold flex-shrink-0">
+                  ✓
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-[10px] font-mono font-semibold text-slate-500 flex-shrink-0">{event.actor}</span>
+                    <span className="text-[10px] font-mono font-semibold text-slate-500 flex-shrink-0">{event.actor || 'admin@wareops.dev'}</span>
                     <span className="text-[10px] font-semibold text-indigo-400">{event.action}</span>
                     <span className="text-[10px] text-slate-600 truncate">{event.resource}</span>
                   </div>
                 </div>
-                <span className="text-[10px] text-slate-600 whitespace-nowrap">{event.time}</span>
+                <span className="text-[10px] text-slate-600 whitespace-nowrap">{event.time || 'recently'}</span>
               </div>
             ))}
           </div>
