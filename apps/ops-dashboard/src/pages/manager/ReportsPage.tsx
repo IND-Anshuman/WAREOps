@@ -1,14 +1,30 @@
 import React, { useState } from 'react';
 import {
   FileText, Download, Play, Trash2, Edit2, Plus,
-  Clock, Users, Calendar, ChevronDown, ChevronUp,
-  Table, FileJson
+  Clock, Calendar, Table, FileJson, CheckCircle2
 } from 'lucide-react';
 import { exportToCsv } from '../../utils/exportCsv';
 import { MOCK_INVENTORY_ITEMS, MOCK_ALERTS, MOCK_MISSIONS } from '../../api/mockData';
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-const scheduledReports = [
+export interface ScheduledReport {
+  id: string;
+  name: string;
+  frequency: string;
+  nextRun: string;
+  recipients: string;
+  status: 'active' | 'paused';
+}
+
+export interface ReportHistoryItem {
+  id: string;
+  name: string;
+  format: 'PDF' | 'CSV';
+  generatedAt: string;
+  size: string;
+  status: 'completed';
+}
+
+const INITIAL_SCHEDULED_REPORTS: ScheduledReport[] = [
   { id: 'r1', name: 'Daily Inventory Summary', frequency: 'Daily', nextRun: 'Tomorrow 06:00', recipients: 'mgmt@warehouse.com, ops@warehouse.com', status: 'active' },
   { id: 'r2', name: 'Weekly Accuracy Report', frequency: 'Weekly (Mon)', nextRun: 'Jul 21, 06:00', recipients: 'manager@warehouse.com', status: 'active' },
   { id: 'r3', name: 'Mission Performance Digest', frequency: 'Weekly (Fri)', nextRun: 'Jul 18, 18:00', recipients: 'ops@warehouse.com, cto@company.com', status: 'paused' },
@@ -16,34 +32,52 @@ const scheduledReports = [
   { id: 'r5', name: 'Monthly Compliance Audit', frequency: 'Monthly (1st)', nextRun: 'Aug 01, 09:00', recipients: 'compliance@company.com, cfo@company.com', status: 'active' },
 ];
 
-const reportHistory = [
+const INITIAL_REPORT_HISTORY: ReportHistoryItem[] = [
   { id: 'h1', name: 'Daily Inventory Summary', format: 'PDF', generatedAt: '2026-07-17 06:00', size: '2.4 MB', status: 'completed' },
   { id: 'h2', name: 'Weekly Accuracy Report', format: 'CSV', generatedAt: '2026-07-14 06:00', size: '840 KB', status: 'completed' },
   { id: 'h3', name: 'Mission Performance Digest', format: 'PDF', generatedAt: '2026-07-11 18:00', size: '3.1 MB', status: 'completed' },
   { id: 'h4', name: 'Robot Health Report', format: 'CSV', generatedAt: '2026-07-17 07:30', size: '512 KB', status: 'completed' },
   { id: 'h5', name: 'Monthly Compliance Audit', format: 'PDF', generatedAt: '2026-07-01 09:00', size: '8.7 MB', status: 'completed' },
-  { id: 'h6', name: 'Daily Inventory Summary', format: 'PDF', generatedAt: '2026-07-16 06:00', size: '2.2 MB', status: 'completed' },
 ];
 
 const REPORT_TYPES = ['Daily Summary', 'Weekly Accuracy', 'Mission Report', 'Custom Audit'];
 
-// ─── Modal ─────────────────────────────────────────────────────────────────────
 interface CreateReportModalProps {
   onClose: () => void;
+  onCreate: (report: ScheduledReport) => void;
 }
 
-const CreateReportModal: React.FC<CreateReportModalProps> = ({ onClose }) => {
+const CreateReportModal: React.FC<CreateReportModalProps> = ({ onClose, onCreate }) => {
   const [type, setType] = useState('Daily Summary');
-  const [format, setFormat] = useState('PDF');
-  const [scheduled, setScheduled] = useState(false);
+  const [format, setFormat] = useState<'PDF' | 'CSV'>('PDF');
+  const [scheduled, setScheduled] = useState(true);
   const [email, setEmail] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newRep: ScheduledReport = {
+      id: `r-${Date.now()}`,
+      name: type,
+      frequency: scheduled ? 'Daily' : 'One-Time',
+      nextRun: 'Tomorrow 08:00',
+      recipients: email || 'ops@wareops.dev',
+      status: 'active',
+    };
+    onCreate(newRep);
+    
+    // Download instant preview
+    const headers = ['Report Title', 'Format', 'Created Date', 'Status'];
+    const rows = [[newRep.name, format, new Date().toISOString(), 'GENERATED']];
+    exportToCsv(`${newRep.name.toLowerCase().replace(/\s+/g, '_')}_export`, headers, rows);
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl border border-white/[0.08] bg-[#0d1424] shadow-2xl">
+      <form onSubmit={handleSubmit} className="w-full max-w-lg rounded-2xl border border-white/[0.08] bg-[#0d1424] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/[0.06] p-6">
           <h2 className="text-base font-semibold text-slate-100">Create New Report</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">✕</button>
         </div>
         <div className="p-6 space-y-4">
           <div>
@@ -51,6 +85,7 @@ const CreateReportModal: React.FC<CreateReportModalProps> = ({ onClose }) => {
             <div className="grid grid-cols-2 gap-2">
               {REPORT_TYPES.map(t => (
                 <button
+                  type="button"
                   key={t}
                   onClick={() => setType(t)}
                   className={`rounded-xl border p-3 text-sm font-medium text-left transition-all
@@ -64,18 +99,19 @@ const CreateReportModal: React.FC<CreateReportModalProps> = ({ onClose }) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Start Date</label>
-              <input type="date" className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-indigo-500 transition-colors" />
+              <input type="date" required defaultValue={new Date().toISOString().split('T')[0]} className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-indigo-500 transition-colors" />
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">End Date</label>
-              <input type="date" className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-indigo-500 transition-colors" />
+              <input type="date" required defaultValue={new Date().toISOString().split('T')[0]} className="w-full rounded-xl bg-white/[0.04] border border-white/[0.08] px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-indigo-500 transition-colors" />
             </div>
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Format</label>
             <div className="flex gap-2">
-              {['PDF', 'CSV'].map(f => (
+              {(['PDF', 'CSV'] as const).map(f => (
                 <button
+                  type="button"
                   key={f}
                   onClick={() => setFormat(f)}
                   className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all
@@ -90,7 +126,7 @@ const CreateReportModal: React.FC<CreateReportModalProps> = ({ onClose }) => {
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">Recipient Emails</label>
             <input
-              type="text"
+              type="email"
               placeholder="email1@company.com, email2@company.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -103,6 +139,7 @@ const CreateReportModal: React.FC<CreateReportModalProps> = ({ onClose }) => {
               <p className="text-xs text-slate-500 mt-0.5">Automatically run on a recurring basis</p>
             </div>
             <button
+              type="button"
               onClick={() => setScheduled(!scheduled)}
               className={`relative h-6 w-11 rounded-full transition-all duration-300 ${scheduled ? 'bg-indigo-600' : 'bg-white/10'}`}
             >
@@ -111,12 +148,12 @@ const CreateReportModal: React.FC<CreateReportModalProps> = ({ onClose }) => {
           </div>
         </div>
         <div className="flex items-center justify-end gap-3 border-t border-white/[0.06] p-6">
-          <button onClick={onClose} className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
-          <button className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors shadow-lg shadow-indigo-500/20">
+          <button type="button" onClick={onClose} className="rounded-xl border border-white/[0.08] px-5 py-2.5 text-sm font-semibold text-slate-400 hover:text-slate-200 transition-colors">Cancel</button>
+          <button type="submit" className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors shadow-lg shadow-indigo-500/20">
             Generate Report
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 };
@@ -124,16 +161,48 @@ const CreateReportModal: React.FC<CreateReportModalProps> = ({ onClose }) => {
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function ReportsPage() {
   const [showModal, setShowModal] = useState(false);
+  const [scheduledReports, setScheduledReports] = useState<ScheduledReport[]>(INITIAL_SCHEDULED_REPORTS);
+  const [reportHistory, setReportHistory] = useState<ReportHistoryItem[]>(INITIAL_REPORT_HISTORY);
   const [runNowId, setRunNowId] = useState<string | null>(null);
 
-  const handleRunNow = (id: string) => {
-    setRunNowId(id);
-    setTimeout(() => setRunNowId(null), 2000);
+  const handleRunNow = (report: ScheduledReport) => {
+    setRunNowId(report.id);
+    const headers = ['Report ID', 'Report Name', 'Frequency', 'Recipients', 'Generated At'];
+    const rows = [[report.id, report.name, report.frequency, report.recipients, new Date().toISOString()]];
+    exportToCsv(`${report.name.toLowerCase().replace(/\s+/g, '_')}_manual_run`, headers, rows);
+
+    setTimeout(() => {
+      setRunNowId(null);
+      setReportHistory(prev => [
+        {
+          id: `h-${Date.now()}`,
+          name: report.name,
+          format: 'CSV',
+          generatedAt: new Date().toLocaleString(),
+          size: '1.1 MB',
+          status: 'completed',
+        },
+        ...prev,
+      ]);
+    }, 1200);
+  };
+
+  const handleDeleteScheduled = (id: string) => {
+    setScheduledReports(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleToggleStatus = (id: string) => {
+    setScheduledReports(prev => prev.map(r => r.id === id ? { ...r, status: r.status === 'active' ? 'paused' : 'active' } : r));
   };
 
   return (
     <div className="min-h-screen bg-[#080c14] p-6 space-y-6">
-      {showModal && <CreateReportModal onClose={() => setShowModal(false)} />}
+      {showModal && (
+        <CreateReportModal
+          onClose={() => setShowModal(false)}
+          onCreate={(newRep) => setScheduledReports(prev => [newRep, ...prev])}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-start justify-between">
@@ -227,25 +296,29 @@ export default function ReportsPage() {
                     <span className="text-xs text-slate-500 max-w-[200px] truncate block">{r.recipients}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold
-                      ${r.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                    <button
+                      onClick={() => handleToggleStatus(r.id)}
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold cursor-pointer transition-all
+                        ${r.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'}`}
+                    >
                       {r.status.toUpperCase()}
-                    </span>
+                    </button>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <button className="rounded-lg bg-white/[0.04] p-1.5 text-slate-500 hover:text-slate-300 transition-colors" title="Edit">
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
                       <button
-                        onClick={() => handleRunNow(r.id)}
+                        onClick={() => handleRunNow(r)}
                         className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all
                           ${runNowId === r.id ? 'bg-emerald-500/20 text-emerald-400' : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'}`}
                       >
                         <Play className="h-3 w-3" />
                         {runNowId === r.id ? 'Running...' : 'Run Now'}
                       </button>
-                      <button className="rounded-lg bg-white/[0.04] p-1.5 text-slate-600 hover:text-red-400 transition-colors" title="Delete">
+                      <button
+                        onClick={() => handleDeleteScheduled(r.id)}
+                        className="rounded-lg bg-white/[0.04] p-1.5 text-slate-600 hover:text-red-400 transition-colors"
+                        title="Delete"
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -291,7 +364,14 @@ export default function ReportsPage() {
                     <span className="rounded-full bg-emerald-500/10 text-emerald-400 px-2.5 py-1 text-[10px] font-semibold">{r.status.toUpperCase()}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <button className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:border-white/[0.15] transition-all">
+                    <button
+                      onClick={() => {
+                        const headers = ['Report Name', 'Format', 'Generated At', 'Status'];
+                        const rows = [[r.name, r.format, r.generatedAt, r.status]];
+                        exportToCsv(`${r.name.toLowerCase().replace(/\s+/g, '_')}_history`, headers, rows);
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 hover:border-white/[0.15] transition-all"
+                    >
                       <Download className="h-3.5 w-3.5" />
                       Download
                     </button>
