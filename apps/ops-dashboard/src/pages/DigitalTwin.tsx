@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Layers, Info, RefreshCw, ZoomIn, ZoomOut, Download, 
   Filter, CheckCircle2, AlertTriangle, Shield, Bot, Eye,
@@ -9,20 +10,23 @@ import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { WarehouseFloorPlan, type TwinBinState, type TwinRobotPosition } from '../components/twin/WarehouseFloorPlan';
-import { robotsApi, inventoryApi } from '../api/client';
+import { robotsApi, inventoryApi, missionsApi } from '../api/client';
 import { MOCK_BINS, MOCK_ROBOTS } from '../api/mockData';
 
 export default function DigitalTwin() {
+  const [searchParams] = useSearchParams();
+  const binParam = searchParams.get('bin');
+  const skuParam = searchParams.get('sku');
+
   const [selectedBinId, setSelectedBinId] = useState<string | null>(null);
   
   // Tactical Overlays
-  const [showRobots, setShowRobots] = useState(true);
+  const [showRobots, setShowRobots] = useState(false);
   const [showBinStates, setShowBinStates] = useState(true);
-  const [showScanCones, setShowScanCones] = useState(true);
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showScanCones, setShowScanCones] = useState(false);
   
   // Presets & Filters
-  const [activePreset, setActivePreset] = useState<'OVERVIEW' | 'HEATMAP' | 'AMR_TRACKING'>('OVERVIEW');
+  const [activePreset, setActivePreset] = useState<'OVERVIEW' | 'AMR_TRACKING'>('OVERVIEW');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterZone, setFilterZone] = useState<string>('ALL');
 
@@ -39,8 +43,6 @@ export default function DigitalTwin() {
           robotsApi.getRobots()
         ]);
 
-        // Exact Topology Requirements: 
-        // 2 Zones -> 2 Aisles/Zone -> 2 Racks/Aisle -> 4 Rows/Rack -> 3 Products/Row = 96 Products
         const zoneConfigs = [
           { zone: 'Zone A', code: 'ZA', baseX: 50, baseY: 70 },
           { zone: 'Zone B', code: 'ZB', baseX: 490, baseY: 70 },
@@ -53,20 +55,20 @@ export default function DigitalTwin() {
         let count = 1;
 
         zoneConfigs.forEach((z) => {
-          for (let aIdx = 0; aIdx < 2; aIdx++) { // 2 Aisles per zone
+          for (let aIdx = 0; aIdx < 2; aIdx++) {
             const aisleY = z.baseY + (aIdx === 0 ? 0 : 235);
             const aisleName = `Aisle ${z.code.slice(-1)}${aIdx + 1}`;
 
-            for (let rIdx = 0; rIdx < 2; rIdx++) { // 2 Racks per aisle
+            for (let rIdx = 0; rIdx < 2; rIdx++) {
               const rackX = z.baseX + (rIdx === 0 ? 0 : 190);
               const rackName = `Rack ${z.code.slice(-1)}${aIdx + 1}-R${rIdx + 1}`;
 
-              for (let rowIdx = 0; rowIdx < 4; rowIdx++) { // 4 Rows per rack
+              for (let rowIdx = 0; rowIdx < 4; rowIdx++) {
                 const rowNum = 4 - rowIdx;
                 const rowY = aisleY + 16 + rowIdx * 20;
                 const rowName = `Row ${rowNum} (Shelf Tier)`;
 
-                for (let pIdx = 0; pIdx < 3; pIdx++) { // 3 Products per row
+                for (let pIdx = 0; pIdx < 3; pIdx++) {
                   const prodNum = pIdx + 1;
                   const state = statesList[(count - 1) % statesList.length];
                   const sku = skusList[(count - 1) % skusList.length];
@@ -95,12 +97,11 @@ export default function DigitalTwin() {
           }
         });
 
-        // Single AMR Bot on map as requested
         const mappedRobots: TwinRobotPosition[] = [
           {
             robot_id: 'AMR-01',
             name: 'Titan Alpha',
-            x: 245,
+            x: 230,
             y: 175,
             battery: 94,
             status: 'AUDITING',
@@ -110,6 +111,16 @@ export default function DigitalTwin() {
 
         setBins(mappedBins);
         setRobots(mappedRobots);
+
+        if (binParam || skuParam) {
+          const matched = mappedBins.find(b =>
+            (binParam && b.bin_code.toLowerCase().includes(binParam.toLowerCase())) ||
+            (skuParam && (b.expected_sku?.toLowerCase() === skuParam.toLowerCase() || b.current_sku?.toLowerCase() === skuParam.toLowerCase()))
+          );
+          if (matched) {
+            setSelectedBinId(matched.bin_id);
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch digital twin data:', err);
       } finally {
@@ -117,6 +128,43 @@ export default function DigitalTwin() {
       }
     };
     fetchData();
+  }, [binParam, skuParam]);
+
+  // Live AMR Waypoint Trajectory Animation
+  useEffect(() => {
+    const waypoints = [
+      { x: 230, y: 175 },
+      { x: 230, y: 410 },
+      { x: 670, y: 410 },
+      { x: 670, y: 175 },
+    ];
+    let step = 0;
+
+    const interval = setInterval(() => {
+      step = (step + 1) % (waypoints.length * 20);
+      const segment = Math.floor(step / 20);
+      const progress = (step % 20) / 20;
+
+      const start = waypoints[segment];
+      const end = waypoints[(segment + 1) % waypoints.length];
+
+      const currentX = Math.round(start.x + (end.x - start.x) * progress);
+      const currentY = Math.round(start.y + (end.y - start.y) * progress);
+
+      setRobots([
+        {
+          robot_id: 'AMR-01',
+          name: 'Titan Alpha',
+          x: currentX,
+          y: currentY,
+          battery: 94,
+          status: 'AUDITING',
+          heading: Math.atan2(end.y - start.y, end.x - start.x) * (180 / Math.PI),
+        },
+      ]);
+    }, 450);
+
+    return () => clearInterval(interval);
   }, []);
 
   const counts = useMemo(() => {
@@ -145,28 +193,34 @@ export default function DigitalTwin() {
     setSelectedBinId(bin.bin_id);
   };
 
-  const handleRescan = () => {
+  const handleRescan = async () => {
     if (!selectedBin) return;
     setRescanTriggered(true);
-    setTimeout(() => {
+    try {
+      await inventoryApi.requestRescan(selectedBin.bin_code);
+      await missionsApi.createMission({
+        name: `Priority Audit - Bin ${selectedBin.bin_code}`,
+        audit_scope: 'RACK',
+        target_scope_id: selectedBin.rack_id,
+        priority: 'HIGH',
+      });
       setBins(prev => prev.map(b => b.bin_id === selectedBin.bin_id ? { ...b, bin_state: 'VERIFIED', confidence: 0.99 } : b));
+      alert(`AMR Titan Alpha dispatched to ${selectedBin.bin_code}. Rescan task created & bin verified!`);
+    } catch (err) {
+      console.error('Failed to dispatch rescan mission:', err);
+    } finally {
       setRescanTriggered(false);
-      alert(`AMR-01 dispatched to ${selectedBin.bin_code}. Rescan completed with 99% confidence!`);
-    }, 1200);
+    }
   };
 
-  const handlePresetSelect = (preset: 'OVERVIEW' | 'HEATMAP' | 'AMR_TRACKING') => {
+  const handlePresetSelect = (preset: 'OVERVIEW' | 'AMR_TRACKING') => {
     setActivePreset(preset);
-    if (preset === 'HEATMAP') {
-      setShowHeatmap(true);
-      setShowRobots(false);
-    } else if (preset === 'AMR_TRACKING') {
-      setShowHeatmap(false);
+    if (preset === 'AMR_TRACKING') {
       setShowRobots(true);
       setShowScanCones(true);
     } else {
-      setShowHeatmap(false);
-      setShowRobots(true);
+      setShowRobots(false);
+      setShowScanCones(false);
     }
   };
 
@@ -208,10 +262,9 @@ export default function DigitalTwin() {
         {/* Tactical Preset Views */}
         <div className="space-y-2">
           <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest block">Tactical View Presets</label>
-          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/06">
+          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/06">
             {[
               { id: 'OVERVIEW', label: 'Overview', icon: Layers },
-              { id: 'HEATMAP', label: 'Heatmap', icon: Flame },
               { id: 'AMR_TRACKING', label: 'AMR Track', icon: Bot },
             ].map(p => (
               <button
@@ -419,7 +472,6 @@ export default function DigitalTwin() {
             showRobots={showRobots}
             showBinStates={showBinStates}
             showScanCones={showScanCones}
-            showHeatmap={showHeatmap}
             filterStatus={filterStatus}
             filterZone={filterZone}
             onBinClick={handleBinSelect}
