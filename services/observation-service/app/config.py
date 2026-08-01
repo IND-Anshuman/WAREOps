@@ -70,6 +70,10 @@ class Settings(BaseSettings):
         default="http://topology-service:8001",
         description="Base URL of the topology service",
     )
+    ALERTING_SERVICE_URL: str = Field(
+        default="http://alerting-service:8005",
+        description="Base URL of the alerting service",
+    )
     HTTP_CLIENT_TIMEOUT: float = Field(default=10.0, description="Downstream HTTP timeout")
     HTTP_CLIENT_MAX_CONNECTIONS: int = Field(default=100)
 

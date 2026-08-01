@@ -270,3 +270,25 @@ export interface Inventory {
   last_audited_at?: string;
   status: 'ACCURATE' | 'DISCREPANT' | 'UNVERIFIED';
 }
+
+export interface InventoryItem {
+  sku: string;
+  name: string;
+  category: string;
+  location: string;
+  status: 'VERIFIED' | 'MISMATCH' | 'MISSING' | 'CLEARED';
+  lastScanned: string;
+  confidence: number;
+}
+
+export interface PendingObservation {
+  id: string;
+  binCode: string;
+  expectedSku: string;
+  observedSku: string;
+  confidence: number;
+  time: string;
+  reason: string;
+  image_url: string;
+  status: 'PENDING' | 'ACCEPTED' | 'RESCAN_DISPATCHED' | 'DISCREPANCY_FLAGGED';
+}

@@ -72,6 +72,10 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: Optional[datetime]
+    role: str = "WAREHOUSE_OPERATOR"
+    warehouse_ids: list[uuid.UUID] = []
+    permissions: list[str] = []
+
 
 
 class UserCreateRequest(BaseModel):

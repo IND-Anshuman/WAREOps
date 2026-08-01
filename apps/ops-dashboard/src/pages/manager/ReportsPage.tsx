@@ -4,7 +4,7 @@ import {
   Clock, Calendar, Table, FileJson, CheckCircle2
 } from 'lucide-react';
 import { exportToCsv } from '../../utils/exportCsv';
-import { MOCK_INVENTORY_ITEMS, MOCK_ALERTS, MOCK_MISSIONS } from '../../api/mockData';
+import { inventoryApi, alertsApi, missionsApi } from '../../api/client';
 
 export interface ScheduledReport {
   id: string;
@@ -225,10 +225,15 @@ export default function ReportsPage() {
         <h2 className="text-sm font-semibold text-slate-300 mb-4">Quick Export</h2>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => {
-              const headers = ['SKU', 'Name', 'Category', 'Location', 'Status', 'Confidence'];
-              const rows = MOCK_INVENTORY_ITEMS.map(i => [i.sku, i.name, i.category, i.location, i.status, i.confidence]);
-              exportToCsv('inventory_catalog_report', headers, rows);
+            onClick={async () => {
+              try {
+                const items = await inventoryApi.searchInventory('');
+                const headers = ['Bin Code', 'Zone', 'Aisle', 'Rack', 'State', 'Expected SKU', 'Observed SKU'];
+                const rows = (items || []).map(i => [i.code, i.zone_id, i.aisle_id, i.rack_id, i.state, i.expected_sku || '', i.observed_sku || '']);
+                exportToCsv('inventory_catalog_report', headers, rows);
+              } catch (err) {
+                console.error('Inventory export failed:', err);
+              }
             }}
             className="flex items-center gap-2.5 rounded-xl border bg-gradient-to-r from-emerald-600/20 to-emerald-500/10 border-emerald-500/20 text-emerald-400 px-5 py-3 text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
@@ -236,10 +241,15 @@ export default function ReportsPage() {
           </button>
 
           <button
-            onClick={() => {
-              const headers = ['Alert ID', 'Type', 'Severity', 'Status', 'Bin Code', 'Title', 'Created At'];
-              const rows = MOCK_ALERTS.map(a => [a.id, a.type, a.severity, a.status, a.bin_code, a.title, a.created_at]);
-              exportToCsv('alert_logs_report', headers, rows);
+            onClick={async () => {
+              try {
+                const alerts = await alertsApi.getAlerts();
+                const headers = ['Alert ID', 'Type', 'Severity', 'Status', 'Bin Code', 'Title', 'Created At'];
+                const rows = (alerts || []).map(a => [a.id, a.type, a.severity, a.status, a.bin_code, a.title, a.created_at]);
+                exportToCsv('alert_logs_report', headers, rows);
+              } catch (err) {
+                console.error('Alerts export failed:', err);
+              }
             }}
             className="flex items-center gap-2.5 rounded-xl border bg-gradient-to-r from-red-600/20 to-red-500/10 border-red-500/20 text-red-400 px-5 py-3 text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
@@ -247,10 +257,15 @@ export default function ReportsPage() {
           </button>
 
           <button
-            onClick={() => {
-              const headers = ['Mission ID', 'Name', 'Status', 'Target Bins', 'Progress %', 'Created At'];
-              const rows = MOCK_MISSIONS.map(m => [m.id, m.name, m.status, m.bins_total, m.progress_percent, m.created_at]);
-              exportToCsv('mission_logs_report', headers, rows);
+            onClick={async () => {
+              try {
+                const missions = await missionsApi.getMissions();
+                const headers = ['Mission ID', 'Name', 'Status', 'Target Bins', 'Progress %', 'Created At'];
+                const rows = (missions || []).map(m => [m.id, m.name, m.status, m.bins_total, m.progress_percent, m.created_at]);
+                exportToCsv('mission_logs_report', headers, rows);
+              } catch (err) {
+                console.error('Missions export failed:', err);
+              }
             }}
             className="flex items-center gap-2.5 rounded-xl border bg-gradient-to-r from-indigo-600/20 to-indigo-500/10 border-indigo-500/20 text-indigo-400 px-5 py-3 text-sm font-semibold transition-all hover:scale-[1.02] active:scale-[0.98]"
           >

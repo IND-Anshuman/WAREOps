@@ -20,8 +20,8 @@ export default function SupervisorReports() {
         setLoading(true);
         const days = timeRange === '7d' ? 7 : timeRange === '90d' ? 90 : 30;
         const [trend, kpiData] = await Promise.all([
-          analyticsApi.getAccuracyTrend('wh-001', days),
-          analyticsApi.getWarehouseKPIs('wh-001'),
+          analyticsApi.getAccuracyTrend('a1b2c3d4-e5f6-7890-abcd-ef1234567890', days),
+          analyticsApi.getWarehouseKPIs('a1b2c3d4-e5f6-7890-abcd-ef1234567890'),
         ]);
         setAccuracyTrend(trend);
         setKpis(kpiData);

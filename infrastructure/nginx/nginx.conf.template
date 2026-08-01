@@ -1,0 +1,192 @@
+events {
+    worker_connections 1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/json;
+
+    access_log /var/log/nginx/access.log;
+    error_log  /var/log/nginx/error.log warn;
+
+    # DNS resolver — Railway internal DNS, fallback to Docker embedded DNS
+    resolver 127.0.0.11 valid=30s ipv6=off;
+
+    # ── Upstream definitions via Railway internal hostnames ────────────────────
+    # In Railway, each service is reachable at <service-name>.railway.internal
+    # In docker-compose, services are reachable by their service name
+    # We use map so the variable is set at nginx start time from env vars,
+    # allowing the same template to work locally (via envsubst for PORT).
+
+    map $host $auth_upstream {
+        default "${AUTH_SERVICE_HOST}";
+    }
+    map $host $topology_upstream {
+        default "${TOPOLOGY_SERVICE_HOST}";
+    }
+    map $host $mission_upstream {
+        default "${MISSION_SERVICE_HOST}";
+    }
+    map $host $observation_upstream {
+        default "${OBSERVATION_SERVICE_HOST}";
+    }
+    map $host $reconciliation_upstream {
+        default "${RECONCILIATION_SERVICE_HOST}";
+    }
+    map $host $alerting_upstream {
+        default "${ALERTING_SERVICE_HOST}";
+    }
+    map $host $twin_upstream {
+        default "${TWIN_SERVICE_HOST}";
+    }
+
+    server {
+        listen ${PORT};
+        server_name _;
+
+        # Global CORS headers
+        add_header 'Access-Control-Allow-Origin'  '*'                                             always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE, PATCH'        always;
+        add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, X-Requested-With' always;
+        add_header 'Access-Control-Allow-Credentials' 'true'                                      always;
+
+        if ($request_method = 'OPTIONS') {
+            return 204;
+        }
+
+        # ── Gateway health ─────────────────────────────────────────────────────
+        location = /health {
+            add_header Content-Type application/json;
+            return 200 '{"status":"ok","service":"api-gateway"}';
+        }
+
+        # ── Auth & Admin API ───────────────────────────────────────────────────
+        location /api/v1/auth {
+            proxy_pass http://$auth_upstream;
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        location /api/v1/admin {
+            proxy_pass http://$auth_upstream;
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        }
+        location /api/v1/notifications {
+            proxy_pass http://$auth_upstream;
+            proxy_set_header Host $host;
+        }
+
+        # ── Digital-Twin REST endpoints ─────────────────────────────────────────
+        # IMPORTANT: These must appear BEFORE the general /api/v1/warehouses block
+        # because nginx uses longest prefix match for location blocks.
+        #
+        # Routes:
+        #   GET /api/v1/warehouses/{uuid}/twin/snapshot   → digital-twin-sync
+        #   GET /api/v1/warehouses/{uuid}/twin/robots     → digital-twin-sync
+        #   GET /api/v1/warehouses/{uuid}/twin/bins       → digital-twin-sync
+        #   GET /api/v1/warehouses/{uuid}/twin/history    → digital-twin-sync
+        location ~ ^/api/v1/warehouses/[^/]+/twin(/.*)?$ {
+            proxy_pass http://$twin_upstream;
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        }
+
+        # ── Topology: warehouses, zones, products, bins ───────────────────────
+        location /api/v1/warehouses {
+            proxy_pass http://$topology_upstream;
+            proxy_set_header Host $host;
+        }
+        location /api/v1/zones {
+            proxy_pass http://$topology_upstream;
+            proxy_set_header Host $host;
+        }
+        location /api/v1/products {
+            proxy_pass http://$topology_upstream;
+            proxy_set_header Host $host;
+        }
+        location /api/v1/bins {
+            proxy_pass http://$topology_upstream;
+            proxy_set_header Host $host;
+        }
+        location /api/v1/dashboard {
+            proxy_pass http://$topology_upstream;
+            proxy_set_header Host $host;
+        }
+
+        # ── Mission & Robot API ─────────────────────────────────────────────────
+        # BUGFIX: /api/v1/robots MUST route to mission-service, NOT topology-service.
+        # The mission-service owns all robot registration, heartbeat, and next-task endpoints.
+        location /api/v1/robots {
+            proxy_pass http://$mission_upstream;
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        }
+        location /api/v1/missions {
+            proxy_pass http://$mission_upstream;
+            proxy_set_header Host $host;
+        }
+
+        # ── Observation ingestion ───────────────────────────────────────────────
+        location /api/v1/observations {
+            proxy_pass http://$observation_upstream;
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        }
+
+        # ── Inventory, Reconciliation & Analytics ──────────────────────────────
+        location /api/v1/inventory {
+            proxy_pass http://$reconciliation_upstream;
+            proxy_set_header Host $host;
+        }
+        location /api/v1/reconciliation {
+            proxy_pass http://$reconciliation_upstream;
+            proxy_set_header Host $host;
+        }
+        location /api/v1/analytics {
+            proxy_pass http://$reconciliation_upstream;
+            proxy_set_header Host $host;
+        }
+
+        # ── Alerting ────────────────────────────────────────────────────────────
+        location /api/v1/alerts {
+            proxy_pass http://$alerting_upstream;
+            proxy_set_header Host              $host;
+            proxy_set_header X-Real-IP         $remote_addr;
+            proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        }
+
+        # ── Digital Twin direct REST (non-warehouse-scoped) ────────────────────
+        location /api/v1/twin {
+            proxy_pass http://$twin_upstream;
+            proxy_set_header Host $host;
+        }
+
+        # ── Socket.IO WebSocket upgrade (Digital Twin live feed) ──────────────
+        location /socket.io/ {
+            proxy_pass         http://$twin_upstream;
+            proxy_http_version 1.1;
+            proxy_set_header   Upgrade    $http_upgrade;
+            proxy_set_header   Connection "upgrade";
+            proxy_set_header   Host       $host;
+            proxy_set_header   X-Real-IP  $remote_addr;
+            proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_read_timeout 86400s;
+            proxy_send_timeout 86400s;
+        }
+
+        # ── React SPA — serve static files, fallback to index.html ────────────
+        # The ops-dashboard is built into /usr/share/nginx/html by its Dockerfile.
+        # All non-API, non-socket paths serve the SPA.
+        location / {
+            root  /usr/share/nginx/html;
+            index index.html;
+            try_files $uri $uri/ /index.html;
+        }
+    }
+}

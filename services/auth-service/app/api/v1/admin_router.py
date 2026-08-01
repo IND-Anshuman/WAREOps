@@ -31,7 +31,7 @@ from app.schemas.auth import (
     UserResponse,
     UserUpdateRequest,
 )
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, build_user_response
 
 log = structlog.get_logger(__name__)
 
@@ -60,13 +60,13 @@ async def list_users(
 ):
     """List users belonging to the current user's organization."""
     repo = AuthRepository(db)
-    users = await repo.get_users_by_org(
+    users, total = await repo.get_users_by_org(
         org_id=current_user.org_id,
         skip=skip,
         limit=limit,
         status_filter=status_filter
     )
-    return [UserResponse.model_validate(u) for u in users]
+    return [await build_user_response(db, u) for u in users]
 
 
 @router.post(
@@ -97,7 +97,7 @@ async def invite_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="User creation failed during invitation flow."
         )
-    return UserResponse.model_validate(user)
+    return await build_user_response(db, user)
 
 
 @router.get(
@@ -119,7 +119,7 @@ async def get_user_details(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found or access denied."
         )
-    return UserResponse.model_validate(user)
+    return await build_user_response(db, user)
 
 
 @router.put(
@@ -148,7 +148,7 @@ async def update_user(
         display_name=body.display_name if body.display_name else user.display_name,
         status=body.status if body.status else user.status
     )
-    return UserResponse.model_validate(updated_user)
+    return await build_user_response(db, updated_user)
 
 
 @router.put(
@@ -194,7 +194,7 @@ async def update_user_role(
     await repo.revoke_all_user_sessions(user_id, reason="ROLE_CHANGE")
     
     refreshed_user = await repo.get_user_by_id(user_id)
-    return UserResponse.model_validate(refreshed_user)
+    return await build_user_response(db, refreshed_user)
 
 
 @router.delete(

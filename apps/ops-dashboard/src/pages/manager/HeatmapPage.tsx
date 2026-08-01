@@ -1,5 +1,8 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { RefreshCw, ZoomIn, ZoomOut, Layers } from 'lucide-react';
+import { warehousesApi, alertsApi } from '../../api/client';
+
+const DEFAULT_WAREHOUSE_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type HeatmapType = 'risk' | 'coverage' | 'alert' | 'traffic';
@@ -38,33 +41,57 @@ function interpolateColor(t: number, minColor: string, maxColor: string): string
   return `rgb(${r},${g},${b})`;
 }
 
-// ─── Generate mock heatmap data ────────────────────────────────────────────────
-function generateCells(type: HeatmapType, timeRange: TimeRange): Cell[] {
-  const cells: Cell[] = [];
-  const zones = ['Zone A', 'Zone B', 'Zone C'];
-  const multiplier = timeRange === 'today' ? 0.6 : timeRange === '7d' ? 0.8 : 1.0;
-  
-  zones.forEach(zone => {
-    for (let aisle = 1; aisle <= 5; aisle++) {
-      for (let rack = 1; rack <= 8; rack++) {
-        let value = Math.random() * multiplier;
-        // Add zone-specific biases
-        if (zone === 'Zone C' && type === 'risk') value = Math.min(1, value + 0.3);
-        if (zone === 'Zone A' && type === 'coverage') value = Math.min(1, value + 0.4);
-        if (zone === 'Zone B' && type === 'alert') value = Math.min(1, value + 0.2);
-        if (zone === 'Zone A' && type === 'traffic') value = Math.min(1, value + 0.5);
-        
-        cells.push({
-          zone,
-          aisle,
-          rack,
-          value: Math.min(1, Math.max(0, value)),
-          label: `${zone} · Aisle ${aisle} · Rack ${rack}`,
-        });
-      }
+// ─── Build heatmap cells from real twin snapshot + alerts ─────────────────────
+function buildCellsFromTwin(
+  binsDict: Record<string, any>,
+  alerts: any[],
+  type: HeatmapType,
+): Cell[] {
+  const rackMap: Record<string, { zone: string; aisle: number; rack: number; bins: any[] }> = {};
+
+  Object.entries(binsDict).forEach(([binId, b]) => {
+    const rackCode = b.rack_id || b.rack_code || 'Unknown';
+    const aisleMatch = rackCode.match(/A(\d+)/i);
+    const rackMatch = rackCode.match(/RK(\d+)/i);
+    const aisleNum = aisleMatch ? parseInt(aisleMatch[1], 10) : 1;
+    const rackNum = rackMatch ? parseInt(rackMatch[1], 10) : 1;
+    const zone = b.zone_id || 'Main Zone';
+    const key = `${zone}-${aisleNum}-${rackNum}`;
+    if (!rackMap[key]) {
+      rackMap[key] = { zone, aisle: aisleNum, rack: rackNum, bins: [] };
     }
+    rackMap[key].bins.push({ ...b, bin_id: binId });
   });
-  return cells;
+
+  const alertBinIds = new Set(alerts.map((a) => a.bin_id).filter(Boolean));
+
+  return Object.values(rackMap).map(({ zone, aisle, rack, bins }) => {
+    const total = bins.length;
+    const verified = bins.filter((b) => b.status === 'VERIFIED').length;
+    const mismatches = bins.filter((b) => b.status === 'MISMATCH').length;
+    const missing = bins.filter((b) => b.status === 'MISSING').length;
+    const unscanned = bins.filter((b) => !b.status || b.status === 'UNSCANNED').length;
+    const alertCount = bins.filter((b) => alertBinIds.has(b.bin_id)).length;
+
+    let value = 0;
+    if (type === 'risk') {
+      value = total > 0 ? (mismatches + missing) / total : 0;
+    } else if (type === 'coverage') {
+      value = total > 0 ? (verified + mismatches) / total : 0;
+    } else if (type === 'alert') {
+      value = Math.min(1, alertCount / Math.max(total, 1));
+    } else {
+      value = total > 0 ? verified / total : 0;
+    }
+
+    return {
+      zone,
+      aisle,
+      rack,
+      value: Math.min(1, Math.max(0, value)),
+      label: `${zone} · Aisle ${aisle} · Rack ${rack}`,
+    };
+  });
 }
 
 // ─── SVG Heatmap ───────────────────────────────────────────────────────────────
@@ -99,10 +126,40 @@ export default function HeatmapPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('7d');
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [rawBins, setRawBins] = useState<Record<string, any>>({});
+  const [alerts, setAlerts] = useState<any[]>([]);
   const [viewBox, setViewBox] = useState({ x: 0, y: 0, scale: 1 });
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const cells = generateCells(heatmapType, timeRange);
+  const loadData = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const [snapshot, alertsList] = await Promise.all([
+        warehousesApi.getTwinSnapshot(DEFAULT_WAREHOUSE_ID).catch(() => null),
+        alertsApi.getAlerts().catch(() => []),
+      ]);
+      setRawBins(snapshot?.bins || {});
+      setAlerts(alertsList as any[]);
+    } catch (err) {
+      console.error('Heatmap load failed:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const cells = useMemo(
+    () => buildCellsFromTwin(rawBins, alerts, heatmapType),
+    [rawBins, alerts, heatmapType],
+  );
+
+  const zoneNames = useMemo(() => [...new Set(cells.map((c) => c.zone))], [cells]);
+  const maxAisle = useMemo(() => Math.max(1, ...cells.map((c) => c.aisle)), [cells]);
+  const maxRack = useMemo(() => Math.max(1, ...cells.map((c) => c.rack)), [cells]);
+
   const config = HEATMAP_CONFIG[heatmapType];
 
   const getDisplayValue = (cell: Cell): string => {
@@ -115,8 +172,7 @@ export default function HeatmapPage() {
   };
 
   const handleRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1200);
+    loadData();
   };
 
   const handleZoom = (dir: 'in' | 'out' | 'reset') => {
@@ -128,7 +184,15 @@ export default function HeatmapPage() {
 
   const ZONE_COLORS = ['rgba(99,102,241,0.08)', 'rgba(16,185,129,0.08)', 'rgba(245,158,11,0.08)'];
   const ZONE_BORDER_COLORS = ['rgba(99,102,241,0.3)', 'rgba(16,185,129,0.3)', 'rgba(245,158,11,0.3)'];
-  const ZONE_NAMES = ['Zone A', 'Zone B', 'Zone C'];
+  const ZONE_NAMES = zoneNames.length > 0 ? zoneNames : ['Main Zone'];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#080c14] p-6 flex items-center justify-center">
+        <div className="text-slate-400 text-sm">Loading heatmap from digital twin...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#080c14] p-6 space-y-5">

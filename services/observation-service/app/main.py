@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
+import redis.asyncio as aioredis
 from app.config import get_settings
 from app.database import init_db, close_db, Base
 from app.api.v1.observation_router import router as observation_router
@@ -16,11 +17,13 @@ settings = get_settings()
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("startup", service=settings.SERVICE_NAME)
+    app.state.redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
     await init_db(settings)
     if db_module._engine:
         async with db_module._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     yield
+    await app.state.redis.aclose()
     await close_db()
     logger.info("shutdown", service=settings.SERVICE_NAME)
 

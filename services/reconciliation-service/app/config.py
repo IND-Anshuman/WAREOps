@@ -56,6 +56,7 @@ class Settings(BaseSettings):
 
     # ── Upstream Services ─────────────────────────────────────────────────────
     TOPOLOGY_SERVICE_URL: str = Field(default="http://topology-service:8001")
+    MISSION_SERVICE_URL: str = Field(default="http://mission-service:8002")
     HTTP_CLIENT_TIMEOUT: float = Field(default=10.0)
 
     # ── Domain Thresholds ─────────────────────────────────────────────────────

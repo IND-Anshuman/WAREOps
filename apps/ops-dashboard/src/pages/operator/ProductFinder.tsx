@@ -6,7 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { productsApi, inventoryApi } from '../../api/client';
-import type { InventoryItem } from '../../api/mockData';
+import type { InventoryItem } from '../../types';
 
 export default function ProductFinder() {
   const navigate = useNavigate();

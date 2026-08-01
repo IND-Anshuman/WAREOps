@@ -20,7 +20,8 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
+import json
 from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
@@ -112,6 +113,18 @@ class BinsStateResponse(BaseModel):
     bins: dict[str, Any]
     count: int
 
+class RobotHeartbeatRequest(BaseModel):
+    """Robot heartbeat telemetry payload."""
+    warehouse_id: str = Field(default="a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+    robot_id: str
+    x: float
+    y: float
+    z: float = 0.0
+    yaw: float = 0.0
+    battery_pct: float = 100.0
+    status: str = "IDLE"
+    mission_id: str | None = None
+
 
 # ── Dependency ────────────────────────────────────────────────────────────────
 
@@ -125,6 +138,16 @@ def get_twin_state(request: Request):  # type: ignore[return]
         )
     return twin_state
 
+
+def get_redis_client(request: Request):  # type: ignore[return]
+    """Extract the Redis client from the app state."""
+    redis_client = getattr(request.app.state, "redis_client", None)
+    if redis_client is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Redis client not initialised",
+        )
+    return redis_client
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -283,3 +306,73 @@ async def get_robot_path_history(
         path=path_points,
         total_points=len(path_points),
     )
+
+
+@router.post(
+    "/twin/robot-heartbeat",
+    status_code=status.HTTP_200_OK,
+    summary="Receive robot heartbeat telemetry",
+    description="Updates the twin state and publishes telemetry for connected clients.",
+)
+async def post_robot_heartbeat(
+    payload: RobotHeartbeatRequest,
+    background_tasks: BackgroundTasks,
+    twin_state: Annotated[Any, Depends(get_twin_state)],
+    redis_client: Annotated[Any, Depends(get_redis_client)],
+) -> dict:
+    """Handle incoming robot telemetry heartbeat."""
+    # Update twin state immediately
+    await twin_state.update_robot_position(
+        warehouse_id=payload.warehouse_id,
+        robot_id=payload.robot_id,
+        x=payload.x,
+        y=payload.y,
+        z=payload.z,
+        yaw=payload.yaw,
+        battery=payload.battery_pct,
+        status=payload.status,
+    )
+
+    # Fire off a background task to publish to Redis Pub/Sub so clients get the update
+    # Note: We publish to both the twin delta channel (for Socket.IO) 
+    # and the original robot.telemetry.heartbeat for consistency if needed.
+    
+    async def _publish_telemetry():
+        try:
+            # 1. Delta for Socket.IO clients directly
+            delta = {
+                "type": "robot_position_update",
+                "warehouse_id": payload.warehouse_id,
+                "robot": {
+                    "robot_id": payload.robot_id,
+                    "x": payload.x,
+                    "y": payload.y,
+                    "z": payload.z,
+                    "yaw": payload.yaw,
+                    "battery": payload.battery_pct,
+                    "status": payload.status,
+                },
+            }
+            channel = f"twin:updates:{payload.warehouse_id}"
+            await redis_client.publish(channel, json.dumps(delta))
+            
+            # 2. Raw telemetry channel (if other services still listen to it)
+            raw_event = {
+                "warehouse_id": payload.warehouse_id,
+                "robot_id": payload.robot_id,
+                "x": payload.x,
+                "y": payload.y,
+                "z": payload.z,
+                "yaw": payload.yaw,
+                "battery_pct": payload.battery_pct,
+                "status": payload.status,
+                "mission_id": payload.mission_id,
+            }
+            await redis_client.publish("robot.telemetry.heartbeat", json.dumps(raw_event))
+            
+        except Exception as exc:
+            logger.error(f"Failed to publish heartbeat telemetry: {exc}")
+
+    background_tasks.add_task(_publish_telemetry)
+    return {"status": "acknowledged", "robot_id": payload.robot_id}
+

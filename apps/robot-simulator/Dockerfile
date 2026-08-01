@@ -38,8 +38,8 @@ WORKDIR /app
 # Copy application source
 COPY . .
 
-# SQLite databases will be written here (per-robot)
-RUN mkdir -p /app/data && chown -R robot:robot /app/data
+# Create data dir and give robot user full ownership of /app
+RUN mkdir -p /app/data && chown -R robot:robot /app
 
 # Metadata labels (OCI image spec)
 LABEL org.opencontainers.image.title="warehouse-robot-simulator" \

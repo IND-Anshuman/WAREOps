@@ -1,83 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ComposedChart, ReferenceLine, Legend
 } from 'recharts';
 import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Target } from 'lucide-react';
+import { analyticsApi, alertsApi, robotsApi, missionsApi } from '../../api/client';
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-const days30 = Array.from({ length: 30 }, (_, i) => {
-  const d = new Date(); d.setDate(d.getDate() - (29 - i));
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-});
+const DEFAULT_WAREHOUSE_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
-const inventoryAccuracyData = days30.map(date => ({
-  date,
-  accuracy: 97.5 + Math.random() * 2.2,
-  scans: 800 + Math.floor(Math.random() * 600),
-}));
+const ALERT_TYPE_COLORS: Record<string, string> = {
+  MISPLACED: '#f97316',
+  MISSING: '#ef4444',
+  EXTRA: '#8b5cf6',
+  DAMAGED: '#f59e0b',
+  MISMATCH: '#f97316',
+  UNKNOWN: '#6b7280',
+};
 
-const zoneAccuracyBreakdown = [
-  { zone: 'Zone A – Electronics', scanned: 480, total: 480, accuracy: 99.6, trend: 'up' },
-  { zone: 'Zone B – Furniture', scanned: 362, total: 380, accuracy: 98.1, trend: 'up' },
-  { zone: 'Zone C – Books', scanned: 195, total: 200, accuracy: 97.5, trend: 'down' },
-  { zone: 'Zone D – Apparel', scanned: 310, total: 320, accuracy: 98.9, trend: 'up' },
-  { zone: 'Zone E – Perishables', scanned: 88, total: 100, accuracy: 94.3, trend: 'down' },
-];
-
-const alertByTypeData = [
-  { type: 'MISPLACED', count: 47, color: '#f97316' },
-  { type: 'MISSING', count: 23, color: '#ef4444' },
-  { type: 'EXTRA', count: 18, color: '#8b5cf6' },
-  { type: 'DAMAGED', count: 11, color: '#f59e0b' },
-];
-
-const topAlertZones = [
-  { zone: 'Zone C – Books', alerts: 28 },
-  { zone: 'Zone E – Perishables', alerts: 21 },
-  { zone: 'Zone B – Furniture', alerts: 15 },
-  { zone: 'Zone D – Apparel', alerts: 10 },
-  { zone: 'Zone A – Electronics', alerts: 7 },
-];
-
-const missionCompletionData = days30.slice(-14).map(date => ({
-  date,
-  rate: 88 + Math.random() * 10,
-}));
-
-const missionDurationData = [
-  { range: '0–15m', count: 12 },
-  { range: '15–30m', count: 34 },
-  { range: '30–45m', count: 28 },
-  { range: '45–60m', count: 16 },
-  { range: '60–90m', count: 8 },
-  { range: '90m+', count: 3 },
-];
-
-const missionOutcome = [
-  { name: 'Success', value: 78, color: '#10b981' },
-  { name: 'Failed', value: 8, color: '#ef4444' },
-  { name: 'Cancelled', value: 14, color: '#6b7280' },
-];
-
-const robotEfficiencyData = [
-  { robot: 'R-001 Atlas', uptime: 97.2, missions: 48, battery: 82, status: 'ACTIVE' },
-  { robot: 'R-002 Nexus', uptime: 94.5, missions: 41, battery: 91, status: 'ACTIVE' },
-  { robot: 'R-003 Vega', uptime: 91.3, missions: 37, battery: 64, status: 'ACTIVE' },
-  { robot: 'R-004 Titan', uptime: 88.1, missions: 29, battery: 100, status: 'CHARGING' },
-  { robot: 'R-005 Orion', uptime: 72.4, missions: 18, battery: 0, status: 'OFFLINE' },
-  { robot: 'R-006 Nova', uptime: 95.8, missions: 45, battery: 77, status: 'ACTIVE' },
-];
-
-const robotScanCoverage = [
-  { robot: 'R-001', scans: 4820 },
-  { robot: 'R-002', scans: 4100 },
-  { robot: 'R-003', scans: 3750 },
-  { robot: 'R-004', scans: 2900 },
-  { robot: 'R-005', scans: 1820 },
-  { robot: 'R-006', scans: 4500 },
-];
+const MISSION_OUTCOME_COLORS: Record<string, string> = {
+  COMPLETED: '#10b981',
+  FAILED: '#ef4444',
+  CANCELLED: '#6b7280',
+  IN_PROGRESS: '#6366f1',
+  SCHEDULED: '#22d3ee',
+};
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -116,6 +63,173 @@ const TABS = ['Inventory Accuracy', 'Alert Analysis', 'Mission Performance', 'Ro
 
 export default function AnalyticsPage() {
   const [activeTab, setActiveTab] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const [inventoryAccuracyData, setInventoryAccuracyData] = useState<{ date: string; accuracy: number; scans: number }[]>([]);
+  const [zoneAccuracyBreakdown, setZoneAccuracyBreakdown] = useState<{ zone: string; scanned: number; total: number; accuracy: number; trend: string }[]>([]);
+  const [alertByTypeData, setAlertByTypeData] = useState<{ type: string; count: number; color: string }[]>([]);
+  const [topAlertZones, setTopAlertZones] = useState<{ zone: string; alerts: number }[]>([]);
+  const [missionCompletionData, setMissionCompletionData] = useState<{ date: string; rate: number }[]>([]);
+  const [missionOutcome, setMissionOutcome] = useState<{ name: string; value: number; color: string }[]>([]);
+  const [robotEfficiencyData, setRobotEfficiencyData] = useState<{ robot: string; uptime: number; missions: number; battery: number; status: string }[]>([]);
+  const [robotScanCoverage, setRobotScanCoverage] = useState<{ robot: string; scans: number }[]>([]);
+  const [slaCompliance, setSlaCompliance] = useState(0);
+  const [missionSuccessRate, setMissionSuccessRate] = useState(0);
+  const [avgBinsScanned, setAvgBinsScanned] = useState(0);
+  const [missionDurationData, setMissionDurationData] = useState<{ range: string; count: number }[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [accuracyTrend, alerts, missionStats, robots, missions, kpis] = await Promise.all([
+          analyticsApi.getAccuracyTrend(DEFAULT_WAREHOUSE_ID, 30).catch(() => []),
+          alertsApi.getAlerts().catch(() => []),
+          analyticsApi.getMissionStats(DEFAULT_WAREHOUSE_ID).catch(() => ({})),
+          robotsApi.getRobots().catch(() => []),
+          missionsApi.getMissions().catch(() => []),
+          analyticsApi.getWarehouseKPIs(DEFAULT_WAREHOUSE_ID).catch(() => null),
+        ]);
+
+        // Inventory accuracy trend
+        if (accuracyTrend.length > 0) {
+          setInventoryAccuracyData(accuracyTrend.map((d) => ({
+            date: d.date,
+            accuracy: d.accuracy,
+            scans: d.alerts || 0,
+          })));
+        }
+
+        // Alerts by type
+        const typeCounts: Record<string, number> = {};
+        const zoneCounts: Record<string, number> = {};
+        let resolvedWithinSla = 0;
+        let resolvedTotal = 0;
+
+        (alerts as any[]).forEach((a) => {
+          const t = a.alert_type || a.type || 'UNKNOWN';
+          typeCounts[t] = (typeCounts[t] || 0) + 1;
+          const zone = a.zone || a.warehouse_id?.slice(0, 8) || 'Warehouse';
+          zoneCounts[zone] = (zoneCounts[zone] || 0) + 1;
+          if (a.status === 'RESOLVED' && a.resolved_at && a.created_at) {
+            resolvedTotal++;
+            const mins = (new Date(a.resolved_at).getTime() - new Date(a.created_at).getTime()) / 60000;
+            if (mins <= 60) resolvedWithinSla++;
+          }
+        });
+
+        setAlertByTypeData(
+          Object.entries(typeCounts).map(([type, count]) => ({
+            type,
+            count,
+            color: ALERT_TYPE_COLORS[type] || '#6b7280',
+          }))
+        );
+
+        setTopAlertZones(
+          Object.entries(zoneCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([zone, alertsCount]) => ({ zone, alerts: alertsCount }))
+        );
+
+        setSlaCompliance(resolvedTotal > 0 ? Math.round((resolvedWithinSla / resolvedTotal) * 1000) / 10 : 0);
+
+        // Mission outcomes from stats
+        const outcomes = Object.entries(missionStats as Record<string, number>)
+          .filter(([, v]) => v > 0)
+          .map(([name, value]) => ({
+            name: name.replace(/_/g, ' '),
+            value,
+            color: MISSION_OUTCOME_COLORS[name] || '#6b7280',
+          }));
+        setMissionOutcome(outcomes);
+
+        // Mission completion trend from missions list
+        const last14 = Array.from({ length: 14 }, (_, i) => {
+          const d = new Date();
+          d.setDate(d.getDate() - (13 - i));
+          return d.toISOString().slice(0, 10);
+        });
+        const dailyRates = last14.map((date) => {
+          const dayMissions = (missions as any[]).filter((m) =>
+            m.completed_at?.startsWith(date) || m.started_at?.startsWith(date)
+          );
+          const completed = dayMissions.filter((m) => m.status === 'COMPLETED').length;
+          const rate = dayMissions.length > 0 ? (completed / dayMissions.length) * 100 : 0;
+          return {
+            date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            rate: Math.round(rate * 10) / 10,
+          };
+        });
+        setMissionCompletionData(dailyRates);
+
+        if (kpis) {
+          setMissionSuccessRate(kpis.mission_success_rate);
+        }
+
+        const completedMissions = (missions as any[]).filter((m) => m.status === 'COMPLETED');
+        const avgBins = completedMissions.length > 0
+          ? Math.round(completedMissions.reduce((s, m) => s + (m.total_bins_scanned || 0), 0) / completedMissions.length)
+          : 0;
+        setAvgBinsScanned(avgBins);
+
+        // Mission duration buckets from completed missions
+        const buckets: Record<string, number> = {
+          '0–15m': 0, '15–30m': 0, '30–45m': 0, '45–60m': 0, '60–90m': 0, '90m+': 0,
+        };
+        completedMissions.forEach((m) => {
+          if (!m.started_at || !m.completed_at) return;
+          const mins = (new Date(m.completed_at).getTime() - new Date(m.started_at).getTime()) / 60000;
+          if (mins <= 15) buckets['0–15m']++;
+          else if (mins <= 30) buckets['15–30m']++;
+          else if (mins <= 45) buckets['30–45m']++;
+          else if (mins <= 60) buckets['45–60m']++;
+          else if (mins <= 90) buckets['60–90m']++;
+          else buckets['90m+']++;
+        });
+        setMissionDurationData(Object.entries(buckets).map(([range, count]) => ({ range, count })));
+
+        // Robot efficiency from real robot list
+        setRobotEfficiencyData((robots as any[]).map((r) => ({
+          robot: r.name || r.serial_number || r.id,
+          uptime: r.battery_pct ?? 100,
+          missions: r.active_mission_id ? 1 : 0,
+          battery: Math.round(r.battery_pct ?? 100),
+          status: r.status || 'IDLE',
+        })));
+
+        setRobotScanCoverage((robots as any[]).map((r) => ({
+          robot: (r.name || r.serial_number || r.id).slice(0, 12),
+          scans: r.total_bins_scanned || 0,
+        })));
+
+        // Zone breakdown — derive from accuracy trend if available
+        if (accuracyTrend.length > 0) {
+          setZoneAccuracyBreakdown([{
+            zone: 'Main Warehouse',
+            scanned: accuracyTrend.reduce((s, d) => s + (d.alerts || 0), 0),
+            total: accuracyTrend.reduce((s, d) => s + (d.alerts || 0), 0),
+            accuracy: accuracyTrend[accuracyTrend.length - 1]?.accuracy ?? 0,
+            trend: 'up',
+          }]);
+        }
+      } catch (err) {
+        console.error('Analytics load failed:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#080c14] p-6 flex items-center justify-center">
+        <div className="text-slate-400 text-sm">Loading analytics from backend...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#080c14] p-6 space-y-6">
@@ -236,13 +350,13 @@ export default function AnalyticsPage() {
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 flex flex-col items-center justify-center gap-4">
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">SLA Compliance</p>
               <div className="text-center">
-                <p className="text-6xl font-bold text-emerald-400" style={{ fontFamily: 'monospace' }}>86.4%</p>
+                <p className="text-6xl font-bold text-emerald-400" style={{ fontFamily: 'monospace' }}>{slaCompliance > 0 ? `${slaCompliance}%` : '—'}</p>
                 <p className="text-sm text-slate-500 mt-2">of alerts resolved within 60 min SLA</p>
               </div>
               <div className="w-full bg-white/5 rounded-full h-2">
-                <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '86.4%' }} />
+                <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${Math.min(slaCompliance, 100)}%` }} />
               </div>
-              <p className="text-xs text-slate-600">Target: 90% · Gap: 3.6%</p>
+              <p className="text-xs text-slate-600">Target: 90% · {slaCompliance > 0 ? `Current: ${slaCompliance}%` : 'No resolved alerts yet'}</p>
             </div>
           </div>
 
@@ -250,7 +364,9 @@ export default function AnalyticsPage() {
           <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6">
             <h2 className="text-base font-semibold text-slate-200 mb-4">Top 5 Alert Zones</h2>
             <div className="space-y-3">
-              {topAlertZones.map((z, idx) => (
+              {topAlertZones.length === 0 ? (
+                <p className="text-sm text-slate-500">No alerts recorded yet.</p>
+              ) : topAlertZones.map((z, idx) => (
                 <div key={z.zone} className="flex items-center gap-4">
                   <span className="text-xs font-bold text-slate-600 w-5">#{idx + 1}</span>
                   <span className="text-sm text-slate-300 w-48">{z.zone}</span>
@@ -332,15 +448,15 @@ export default function AnalyticsPage() {
             </div>
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-6 flex flex-col items-center justify-center gap-2">
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">Avg Bins Scanned</p>
-              <p className="text-5xl font-bold text-indigo-400" style={{ fontFamily: 'monospace' }}>312</p>
+              <p className="text-5xl font-bold text-indigo-400" style={{ fontFamily: 'monospace' }}>{avgBinsScanned || '—'}</p>
               <p className="text-sm text-slate-500">per mission</p>
               <div className="mt-4 grid grid-cols-2 gap-4 w-full">
                 <div className="text-center">
-                  <p className="text-lg font-bold text-slate-200">34.8m</p>
+                  <p className="text-lg font-bold text-slate-200">—</p>
                   <p className="text-[10px] text-slate-500">avg duration</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-lg font-bold text-slate-200">94.1%</p>
+                  <p className="text-lg font-bold text-slate-200">{missionSuccessRate > 0 ? `${missionSuccessRate.toFixed(1)}%` : '—'}</p>
                   <p className="text-[10px] text-slate-500">success rate</p>
                 </div>
               </div>

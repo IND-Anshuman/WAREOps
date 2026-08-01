@@ -18,7 +18,7 @@ class LocalObservationBuffer:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS buffered_observations (
-                    id INTEGER PRIMARY KEY AUTOIONCREMENT,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     observation_id TEXT NOT NULL UNIQUE,
                     payload TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

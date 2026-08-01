@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from pydantic import ConfigDict
 from typing import List, Optional
 from decimal import Decimal
 from datetime import datetime
@@ -18,13 +19,12 @@ class WarehouseCreate(WarehouseBase):
     pass
 
 class WarehouseResponse(WarehouseBase):
-    id: str
+    id: uuid.UUID
     is_active: bool
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Zone ---
 class ZoneBase(BaseModel):
@@ -38,12 +38,11 @@ class ZoneCreate(ZoneBase):
     warehouse_id: str
 
 class ZoneResponse(ZoneBase):
-    id: str
-    warehouse_id: str
+    id: uuid.UUID
+    warehouse_id: uuid.UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Aisle ---
 class AisleBase(BaseModel):
@@ -59,12 +58,11 @@ class AisleCreate(AisleBase):
     zone_id: str
 
 class AisleResponse(AisleBase):
-    id: str
-    zone_id: str
+    id: uuid.UUID
+    zone_id: uuid.UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Rack ---
 class RackBase(BaseModel):
@@ -83,12 +81,11 @@ class RackCreate(RackBase):
     aisle_id: str
 
 class RackResponse(RackBase):
-    id: str
-    aisle_id: str
+    id: uuid.UUID
+    aisle_id: uuid.UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Shelf ---
 class ShelfBase(BaseModel):
@@ -101,12 +98,11 @@ class ShelfCreate(ShelfBase):
     rack_id: str
 
 class ShelfResponse(ShelfBase):
-    id: str
-    rack_id: str
+    id: uuid.UUID
+    rack_id: uuid.UUID
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Bin ---
 class BinBase(BaseModel):
@@ -124,14 +120,13 @@ class BinCreate(BinBase):
     shelf_id: str
 
 class BinResponse(BinBase):
-    id: str
-    shelf_id: str
+    id: uuid.UUID
+    shelf_id: uuid.UUID
     is_active: bool
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- Detail Hierarchical Schemas ---
 class BinDetail(BinResponse):
@@ -173,8 +168,7 @@ class ProductResponse(ProductBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BulkDeleteRequest(BaseModel):
     skus: List[str]

@@ -1,53 +1,43 @@
-# ─────────────────────────────────────────────
-# Stage 1: Builder
-# ─────────────────────────────────────────────
 FROM python:3.12-slim AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /build
 
-# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
+    build-essential libpq-dev gcc \
     && rm -rf /var/lib/apt/lists/*
 
+RUN python -m venv /build/venv
+ENV PATH="/build/venv/bin:$PATH"
+
 COPY requirements.txt .
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-RUN pip install --upgrade pip && \
-    pip install --prefix=/install --no-cache-dir -r requirements.txt
-
-# ─────────────────────────────────────────────
-# Stage 2: Runtime
-# ─────────────────────────────────────────────
+# ── Runtime ───────────────────────────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
 
-# Security: non-root user
-RUN groupadd --gid 1001 appgroup && \
-    useradd --uid 1001 --gid appgroup --shell /bin/bash --create-home appuser
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/venv/bin:$PATH" \
+    PORT=8000
 
 WORKDIR /app
 
-# Install only runtime system deps
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    curl \
+RUN apt-get update && apt-get install -y --no-install-recommends libpq5 curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy installed packages from builder
-COPY --from=builder /install /usr/local
+RUN groupadd --gid 1001 appgroup && \
+    useradd --uid 1001 --gid appgroup --shell /bin/bash --create-home appuser
 
-# Copy application source
+COPY --from=builder /build/venv /app/venv
 COPY --chown=appuser:appgroup app/ ./app/
 
-# Drop privileges
 USER appuser
 
-# Expose service port
-EXPOSE 8006
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD curl -f http://localhost:8006/health || exit 1
-
-# Start the service
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8006", "--workers", "1", "--loop", "uvloop", "--http", "httptools"]
+CMD ["sh", "-c", "/app/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers 1 --loop uvloop --http httptools"]

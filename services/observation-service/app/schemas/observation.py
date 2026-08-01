@@ -104,11 +104,11 @@ class ObservationBatch(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    robot_id: uuid.UUID
+    robot_id: uuid.UUID | None = None
     mission_id: uuid.UUID | None = None
-    warehouse_id: uuid.UUID
+    warehouse_id: uuid.UUID | None = None
     observations: list[ObservationIngest] = Field(
-        ..., min_length=1, max_length=50, description="List of individual observations (max 50)"
+        ..., min_length=1, max_length=500, description="List of individual observations"
     )
 
 

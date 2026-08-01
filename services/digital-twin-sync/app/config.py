@@ -33,15 +33,6 @@ class Settings(BaseSettings):
         description="Redis connection URL",
     )
 
-    # ── Kafka ────────────────────────────────────────────────────
-    KAFKA_BOOTSTRAP_SERVERS: str = Field(
-        default="localhost:9092",
-        description="Comma-separated Kafka bootstrap servers",
-    )
-    CONSUMER_GROUP_ID: str = Field(
-        default="digital-twin-sync-group",
-        description="Kafka consumer group identifier",
-    )
 
     # ── External services ────────────────────────────────────────
     TOPOLOGY_SERVICE_URL: str = Field(
@@ -76,16 +67,6 @@ class Settings(BaseSettings):
             raise ValueError(f"LOG_LEVEL must be one of {allowed}")
         return v.upper()
 
-    @field_validator("KAFKA_BOOTSTRAP_SERVERS")
-    @classmethod
-    def validate_kafka_servers(cls, v: str) -> str:
-        """Strip whitespace from comma-separated server list."""
-        return ",".join(s.strip() for s in v.split(","))
-
-    @property
-    def kafka_servers_list(self) -> list[str]:
-        """Return Kafka bootstrap servers as a list."""
-        return self.KAFKA_BOOTSTRAP_SERVERS.split(",")
 
 
 # Module-level singleton — import this everywhere

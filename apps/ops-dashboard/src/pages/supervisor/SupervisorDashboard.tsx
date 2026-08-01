@@ -4,27 +4,41 @@ import { AlertTriangle, Compass, Users, Clock, ArrowRight, Play, Eye } from 'luc
 import { Card } from '../../components/ui/Card';
 import { StatCard } from '../../components/ui/StatCard';
 import { Table } from '../../components/ui/Table';
-import { alertsApi, missionsApi } from '../../api/client';
-import { MOCK_TEAM } from '../../api/mockData';
-import type { Alert, Mission } from '../../types';
+import { alertsApi, missionsApi, adminApi } from '../../api/client';
+import type { Alert, Mission, TeamMember } from '../../types';
 
 export default function SupervisorDashboard() {
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
-  const [team, setTeam] = useState(MOCK_TEAM);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
         setLoading(true);
-        const [aList, mList] = await Promise.all([
+        const [aList, mList, uList] = await Promise.all([
           alertsApi.getAlerts().catch(() => []),
           missionsApi.getMissions().catch(() => []),
+          adminApi.getUsers().catch(() => []),
         ]);
         setAlerts(aList);
         setMissions(mList);
+        if (Array.isArray(uList) && uList.length > 0) {
+          setTeam(uList.map(u => ({
+            id: u.id,
+            user_id: u.id,
+            display_name: u.display_name || u.email,
+            email: u.email,
+            role: u.role,
+            status: u.status === 'ACTIVE' ? 'ONLINE' : 'OFFLINE',
+            last_action: 'Active on floor',
+            last_action_at: u.last_login_at || new Date().toISOString(),
+            pending_tasks: 0,
+            avg_response_time_min: 8,
+          })));
+        }
       } catch (err) {
         console.error('Failed to load supervisor dashboard data:', err);
       } finally {

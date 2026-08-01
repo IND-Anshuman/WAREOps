@@ -8,7 +8,7 @@ import structlog
 from fastapi.exceptions import RequestValidationError
 
 from app.config import get_settings
-from app.database import init_db, close_db, Base, _engine
+from app.database import create_all_tables, dispose_engine, Base
 from app.api.v1.alert_router import router as alert_router
 from app.models.alert import Base
 
@@ -18,17 +18,11 @@ logger = structlog.get_logger(__name__)
 async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info("alerting_service.startup")
-    await init_db(settings)
-    
-    # Create tables
-    from app.database import _engine
-    async with _engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        
+    # Create tables using alembic-style create_all
+    await create_all_tables()
     yield
-    
     logger.info("alerting_service.shutdown")
-    await close_db()
+    await dispose_engine()
 
 app = FastAPI(
     title="Alerting Service",

@@ -49,7 +49,6 @@ structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.ExceptionRenderer(),
@@ -254,13 +253,13 @@ async def health_check() -> dict[str, object]:
         health["checks"]["redis"] = f"error: {exc}"  # type: ignore[index]
         health["status"] = "degraded"
 
-    # Kafka consumer alive check
+    # Redis subscriber alive check
     try:
         consumer = app.state.kafka_consumer
         task: asyncio.Task[None] = consumer._task  # type: ignore[attr-defined]
-        health["checks"]["kafka_consumer"] = "ok" if (task and not task.done()) else "stopped"  # type: ignore[index]
+        health["checks"]["event_subscriber"] = "ok" if (task and not task.done()) else "stopped"  # type: ignore[index]
     except Exception as exc:
-        health["checks"]["kafka_consumer"] = f"error: {exc}"  # type: ignore[index]
+        health["checks"]["event_subscriber"] = f"error: {exc}"  # type: ignore[index]
 
     return health
 
