@@ -1,13 +1,14 @@
 """
-Multi-topic Kafka consumer for the digital-twin-sync service.
+Redis Pub/Sub subscriber for the digital-twin-sync service.
 
-Subscribes to the following topics:
+Replaces the original Kafka consumer with Redis Pub/Sub for simplified
+deployment on Railway. Subscribes to the following channels:
     - ``robot.telemetry.heartbeat``         → update robot position in twin state
     - ``observation.raw``                   → update bin state with observed SKU
     - ``inventory.reconciliation.mismatch`` → mark bin MISMATCH
     - ``inventory.reconciliation.verified`` → mark bin VERIFIED
 
-For every processed event the consumer publishes a delta message to the
+For every processed event the subscriber publishes a delta message to the
 Redis Pub/Sub channel ``twin:updates:{warehouse_id}`` so that the Socket.IO
 layer can fan out the change to all connected web clients.
 """
@@ -20,164 +21,134 @@ import time
 from typing import Any
 
 import structlog
-from aiokafka import AIOKafkaConsumer
-from aiokafka.errors import KafkaConnectionError
 from redis.asyncio import Redis
-from tenacity import (
-    AsyncRetrying,
-    RetryError,
-    before_sleep_log,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
 
 from app.config import settings
 from app.state.twin_state import WarehouseTwinState
 
 logger = structlog.get_logger(__name__)
 
-# ── Topics ────────────────────────────────────────────────────────────────────
-TOPIC_ROBOT_HEARTBEAT = "robot.telemetry.heartbeat"
-TOPIC_OBSERVATION_RAW = "observation.raw"
-TOPIC_MISMATCH = "inventory.reconciliation.mismatch"
-TOPIC_VERIFIED = "inventory.reconciliation.verified"
+# ── Channels (same names as the old Kafka topics) ────────────────────────────
+CHANNEL_ROBOT_HEARTBEAT = "robot.telemetry.heartbeat"
+CHANNEL_OBSERVATION_RAW = "observation.raw"
+CHANNEL_MISMATCH = "inventory.reconciliation.mismatch"
+CHANNEL_VERIFIED = "inventory.reconciliation.verified"
 
-ALL_TOPICS = [
-    TOPIC_ROBOT_HEARTBEAT,
-    TOPIC_OBSERVATION_RAW,
-    TOPIC_MISMATCH,
-    TOPIC_VERIFIED,
+ALL_CHANNELS = [
+    CHANNEL_ROBOT_HEARTBEAT,
+    CHANNEL_OBSERVATION_RAW,
+    CHANNEL_MISMATCH,
+    CHANNEL_VERIFIED,
 ]
 
-# Redis Pub/Sub channel template
+# Redis Pub/Sub channel template for twin deltas
 _PUBSUB_CHANNEL = "twin:updates:{warehouse_id}"
 
 
 class TwinKafkaConsumer:
     """
-    Long-running Kafka consumer that drives digital-twin state updates.
+    Redis Pub/Sub subscriber that drives digital-twin state updates.
+
+    NOTE: Class is named TwinKafkaConsumer for backward compatibility with
+    main.py imports. Internally uses Redis Pub/Sub instead of Kafka.
 
     Each incoming message is decoded, validated, and dispatched to the
-    appropriate handler method.  After updating Redis state the consumer
+    appropriate handler method.  After updating Redis state the subscriber
     publishes a compact delta onto the Pub/Sub channel for the affected
     warehouse so the Socket.IO server can relay it to browser clients.
     """
 
     def __init__(self, twin_state: WarehouseTwinState, redis_client: Redis) -> None:
-        """
-        Initialise the consumer.
-
-        Args:
-            twin_state:    Warehouse twin state manager backed by Redis.
-            redis_client:  Connected async Redis client (used for Pub/Sub).
-        """
         self._twin = twin_state
         self._redis = redis_client
-        self._consumer: AIOKafkaConsumer | None = None
         self._running = False
         self._task: asyncio.Task[None] | None = None
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     async def start(self) -> None:
-        """Start the consumer with automatic retry on connection failure."""
-        logger.info("twin_consumer_starting", topics=ALL_TOPICS)
+        """Start the Redis Pub/Sub subscriber."""
+        logger.info("twin_subscriber_starting", channels=ALL_CHANNELS)
         self._running = True
-        self._task = asyncio.create_task(self._run_with_retry(), name="twin-kafka-consumer")
+        self._task = asyncio.create_task(self._run_subscriber(), name="twin-redis-subscriber")
 
     async def stop(self) -> None:
-        """Gracefully stop the consumer."""
-        logger.info("twin_consumer_stopping")
+        """Gracefully stop the subscriber."""
+        logger.info("twin_subscriber_stopping")
         self._running = False
-        if self._consumer:
-            await self._consumer.stop()
         if self._task and not self._task.done():
             self._task.cancel()
             try:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        logger.info("twin_consumer_stopped")
+        logger.info("twin_subscriber_stopped")
 
-    # ── Internal run loop ────────────────────────────────────────────────────
+    # ── Internal subscribe loop ──────────────────────────────────────────────
 
-    async def _run_with_retry(self) -> None:
-        """Run the main consume loop, retrying on Kafka connectivity failures."""
-        try:
-            async for attempt in AsyncRetrying(
-                retry=retry_if_exception_type(KafkaConnectionError),
-                wait=wait_exponential(multiplier=1, min=2, max=30),
-                stop=stop_after_attempt(20),
-                before_sleep=before_sleep_log(logger, "warning"),  # type: ignore[arg-type]
-                reraise=True,
-            ):
-                with attempt:
-                    await self._consume_loop()
-        except RetryError:
-            logger.error("twin_consumer_exhausted_retries")
-        except Exception as exc:
-            logger.exception("twin_consumer_fatal_error", error=str(exc))
+    async def _run_subscriber(self) -> None:
+        """Subscribe to Redis channels and process messages."""
+        while self._running:
+            try:
+                pubsub = self._redis.pubsub()
+                await pubsub.subscribe(*ALL_CHANNELS)
+                logger.info("twin_subscriber_connected", channels=ALL_CHANNELS)
 
-    async def _consume_loop(self) -> None:
-        """Create consumer, subscribe, and process messages indefinitely."""
-        self._consumer = AIOKafkaConsumer(
-            *ALL_TOPICS,
-            bootstrap_servers=settings.kafka_servers_list,
-            group_id=settings.CONSUMER_GROUP_ID,
-            value_deserializer=lambda b: json.loads(b.decode("utf-8")),
-            auto_offset_reset="latest",
-            enable_auto_commit=True,
-            auto_commit_interval_ms=1000,
-            session_timeout_ms=30_000,
-            heartbeat_interval_ms=10_000,
-            max_poll_records=50,
-        )
+                async for message in pubsub.listen():
+                    if not self._running:
+                        break
+                    if message["type"] != "message":
+                        continue
 
-        await self._consumer.start()
-        logger.info("twin_consumer_connected", topics=ALL_TOPICS)
+                    channel = message["channel"]
+                    if isinstance(channel, bytes):
+                        channel = channel.decode("utf-8")
 
-        try:
-            async for msg in self._consumer:
-                if not self._running:
-                    break
-                await self._dispatch(msg.topic, msg.value or {})
-        finally:
-            await self._consumer.stop()
-            self._consumer = None
+                    raw_data = message["data"]
+                    if isinstance(raw_data, bytes):
+                        raw_data = raw_data.decode("utf-8")
+
+                    try:
+                        event = json.loads(raw_data)
+                    except json.JSONDecodeError:
+                        logger.warning("twin_subscriber_invalid_json", channel=channel)
+                        continue
+
+                    await self._dispatch(channel, event)
+
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.exception("twin_subscriber_error", error=str(exc))
+                if self._running:
+                    await asyncio.sleep(5)  # Backoff before retry
 
     # ── Dispatch ──────────────────────────────────────────────────────────────
 
-    async def _dispatch(self, topic: str, event: dict[str, Any]) -> None:
-        """Route an incoming Kafka message to the correct handler."""
+    async def _dispatch(self, channel: str, event: dict[str, Any]) -> None:
+        """Route an incoming message to the correct handler."""
         try:
-            if topic == TOPIC_ROBOT_HEARTBEAT:
+            if channel == CHANNEL_ROBOT_HEARTBEAT:
                 await self._handle_robot_heartbeat(event)
-            elif topic == TOPIC_OBSERVATION_RAW:
+            elif channel == CHANNEL_OBSERVATION_RAW:
                 await self._handle_observation_raw(event)
-            elif topic == TOPIC_MISMATCH:
+            elif channel == CHANNEL_MISMATCH:
                 await self._handle_mismatch(event)
-            elif topic == TOPIC_VERIFIED:
+            elif channel == CHANNEL_VERIFIED:
                 await self._handle_verified(event)
             else:
-                logger.warning("twin_consumer_unknown_topic", topic=topic)
+                logger.warning("twin_subscriber_unknown_channel", channel=channel)
         except Exception as exc:
             logger.exception(
-                "twin_consumer_dispatch_error",
-                topic=topic,
+                "twin_subscriber_dispatch_error",
+                channel=channel,
                 error=str(exc),
                 event_preview=str(event)[:200],
             )
 
-    # ── Handlers ──────────────────────────────────────────────────────────────
+    # ── Handlers (identical logic to original Kafka consumer) ─────────────────
 
     async def _handle_robot_heartbeat(self, event: dict[str, Any]) -> None:
-        """
-        Process ``robot.telemetry.heartbeat`` event.
-
-        Expected payload fields:
-            warehouse_id, robot_id, x, y, z, yaw, battery_pct, status
-        """
         warehouse_id = event.get("warehouse_id", "unknown")
         robot_id: str = event.get("robot_id", "")
         if not robot_id:
@@ -210,12 +181,6 @@ class TwinKafkaConsumer:
         await self._publish_delta(warehouse_id, delta)
 
     async def _handle_observation_raw(self, event: dict[str, Any]) -> None:
-        """
-        Process ``observation.raw`` event.
-
-        Expected payload fields:
-            warehouse_id, bin_id, sku (optional), confidence
-        """
         warehouse_id = event.get("warehouse_id", "unknown")
         bin_id: str = str(event.get("bin_id", ""))
         if not bin_id:
@@ -246,12 +211,6 @@ class TwinKafkaConsumer:
         await self._publish_delta(warehouse_id, delta)
 
     async def _handle_mismatch(self, event: dict[str, Any]) -> None:
-        """
-        Process ``inventory.reconciliation.mismatch`` event.
-
-        Expected payload fields:
-            warehouse_id, bin_id, expected_sku, observed_sku, mismatch_type, confidence
-        """
         warehouse_id = event.get("warehouse_id", "unknown")
         bin_id: str = str(event.get("bin_id", ""))
         if not bin_id:
@@ -289,12 +248,6 @@ class TwinKafkaConsumer:
         )
 
     async def _handle_verified(self, event: dict[str, Any]) -> None:
-        """
-        Process ``inventory.reconciliation.verified`` event.
-
-        Expected payload fields:
-            warehouse_id, bin_id, sku, confidence
-        """
         warehouse_id = event.get("warehouse_id", "unknown")
         bin_id: str = str(event.get("bin_id", ""))
         if not bin_id:
@@ -331,16 +284,6 @@ class TwinKafkaConsumer:
     # ── Pub/Sub publisher ─────────────────────────────────────────────────────
 
     async def _publish_delta(self, warehouse_id: str, delta: dict[str, Any]) -> None:
-        """
-        Publish a twin delta to Redis Pub/Sub for the given warehouse.
-
-        The Socket.IO server subscribes to these channels and relays
-        the message to all browser clients in the warehouse room.
-
-        Args:
-            warehouse_id: Target warehouse identifier.
-            delta:        Serialisable dict describing the state change.
-        """
         channel = _PUBSUB_CHANNEL.format(warehouse_id=warehouse_id)
         try:
             await self._redis.publish(channel, json.dumps(delta))

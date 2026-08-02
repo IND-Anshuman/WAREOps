@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { exportToCsv } from '../../utils/exportCsv';
 import { analyticsApi, alertsApi, robotsApi, adminApi } from '../../api/client';
+import type { WarehouseKPIs } from '../../types';
 
 // ─── Circular Health Score Gauge ───────────────────────────────────────────────
 const HealthGauge: React.FC<{ score: number }> = ({ score }) => {
@@ -145,66 +146,88 @@ export default function ExecutiveDashboard() {
   const [accuracyTrend, setAccuracyTrend] = useState<{ day: string; value: number }[]>([]);
   const [robotUtilization, setRobotUtilization] = useState<{ name: string; value: number; color: string }[]>([]);
   const [criticalEvents, setCriticalEvents] = useState<any[]>([]);
-  const [healthScore, setHealthScore] = useState(91);
+  const [healthScore, setHealthScore] = useState(0);
+  const [alertTrendData, setAlertTrendData] = useState<{ date: string; critical: number; high: number; medium: number; low: number }[]>([]);
 
-  const alertTrendData = Array.from({ length: 14 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - (13 - i));
-    return {
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      critical: Math.floor(Math.random() * 2),
-      high: Math.floor(Math.random() * 4),
-      medium: Math.floor(Math.random() * 6),
-      low: Math.floor(Math.random() * 8),
-    };
-  });
+  // Real KPI values populated from analyticsApi.getWarehouseKPIs
+  const [kpis, setKpis] = useState<WarehouseKPIs | null>(null);
 
   useEffect(() => {
     const loadExecutiveData = async () => {
       try {
-        const [trendData, robotsList, alertsList, auditLogs] = await Promise.all([
-          analyticsApi.getAccuracyTrend('wh-001'),
-          robotsApi.getRobots(),
-          alertsApi.getAlerts(),
-          adminApi.getAuditLogs(),
+        // Default warehouse ID — must match seeded warehouse UUID
+        const warehouseId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+        const [trendData, robotsList, alertsList, auditLogs, alertFreq, kpisData] = await Promise.all([
+          analyticsApi.getAccuracyTrend(warehouseId).catch(() => []),
+          robotsApi.getRobots().catch(() => []),
+          alertsApi.getAlerts().catch(() => []),
+          adminApi.getAuditLogs().catch(() => []),
+          analyticsApi.getAlertFrequency(warehouseId).catch(() => []),
+          analyticsApi.getWarehouseKPIs(warehouseId).catch(() => null),
         ]);
 
-        if (trendData && trendData.length > 0) {
-          setAccuracyTrend(trendData.slice(-14).map((d, i) => ({ day: `D${i + 1}`, value: d.accuracy })));
+        // ── KPIs ───────────────────────────────────────────────────────────────
+        if (kpisData && typeof kpisData.health_score === 'number') {
+          setKpis(kpisData);
+          setHealthScore(Math.round(kpisData.health_score));
         } else {
-          setAccuracyTrend(Array.from({ length: 14 }, (_, i) => ({ day: `D${i + 1}`, value: 98.2 + (i % 3) * 0.4 })));
+          // Compute fallback health score from available data
+          const latestAcc = trendData.length > 0 ? trendData[trendData.length - 1].accuracy : 99.0;
+          const activeCount = robotsList.filter((r: any) => r.status === 'ONLINE' || r.status === 'AUDITING').length;
+          const robotHealth = robotsList.length > 0 ? (activeCount / robotsList.length) * 100 : 100;
+          const calculated = Math.round(latestAcc * 0.7 + robotHealth * 0.3);
+          setHealthScore(Math.min(99, Math.max(0, calculated)));
         }
 
-        const activeCount = robotsList.filter(r => r.status === 'ONLINE').length;
-        const chargingCount = robotsList.filter(r => r.status === 'CHARGING').length;
-        const offlineCount = robotsList.filter(r => r.status === 'OFFLINE' || r.status === 'ERROR').length;
+        // ── Alert frequency trend ──────────────────────────────────────────────
+        if (Array.isArray(alertFreq) && alertFreq.length > 0) {
+          setAlertTrendData(alertFreq.map((af: any) => ({
+            date: af.date,
+            critical: af.CRITICAL || 0,
+            high: af.HIGH || 0,
+            medium: af.MEDIUM || 0,
+            low: af.LOW || 0,
+          })));
+        } else {
+          setAlertTrendData([]);
+        }
+
+        // ── Accuracy sparkline ─────────────────────────────────────────────────
+        if (trendData && trendData.length > 0) {
+          setAccuracyTrend(trendData.slice(-14).map((d: any, i: number) => ({
+            day: `D${i + 1}`,
+            value: d.accuracy,
+          })));
+        }
+
+        // ── Robot utilization donut ────────────────────────────────────────────
+        const activeCount = robotsList.filter((r: any) => r.status === 'ONLINE' || r.status === 'AUDITING').length;
+        const chargingCount = robotsList.filter((r: any) => r.status === 'CHARGING').length;
+        const offlineCount = robotsList.filter((r: any) => r.status === 'OFFLINE' || r.status === 'FAULTED').length;
+        const idleCount = Math.max(0, robotsList.length - activeCount - chargingCount - offlineCount);
 
         setRobotUtilization([
-          { name: 'Active', value: activeCount || 4, color: '#6366f1' },
-          { name: 'Charging', value: chargingCount || 2, color: '#10b981' },
-          { name: 'Offline', value: offlineCount || 1, color: '#374151' },
-        ]);
+          { name: 'Active', value: activeCount || 0, color: '#6366f1' },
+          { name: 'Idle', value: idleCount || 0, color: '#22d3ee' },
+          { name: 'Charging', value: chargingCount || 0, color: '#10b981' },
+          { name: 'Offline', value: offlineCount || 0, color: '#374151' },
+        ].filter(r => r.value > 0));
 
-        const mappedLogs = (auditLogs as any[]).slice(0, 5).map((log, idx) => ({
+        // ── Critical events from audit logs ────────────────────────────────────
+        const mappedLogs = (auditLogs as any[]).slice(0, 5).map((log: any, idx: number) => ({
           id: log.id || idx,
-          icon: log.outcome === 'success' ? CheckCircle2 : AlertTriangle,
-          iconColor: log.outcome === 'success' ? 'text-emerald-400' : 'text-red-400',
-          bgColor: log.outcome === 'success' ? 'bg-emerald-500/10' : 'bg-red-500/10',
-          title: `${log.action ? log.action.replace(/_/g, ' ') : 'EVENT_TRIGGERED'}`,
-          desc: `${log.resource || 'System Resource'} by ${log.actor || 'Operator'}`,
-          time: log.time || 'recently',
-          severity: log.outcome === 'success' ? 'success' : 'critical',
+          icon: log.outcome === 'SUCCESS' ? CheckCircle2 : AlertTriangle,
+          iconColor: log.outcome === 'SUCCESS' ? 'text-emerald-400' : 'text-red-400',
+          bgColor: log.outcome === 'SUCCESS' ? 'bg-emerald-500/10' : 'bg-red-500/10',
+          title: log.event_type ? log.event_type.replace(/_/g, ' ') : 'SYSTEM EVENT',
+          desc: `${log.resource_type || 'resource'} · ${log.actor_role || 'system'}`,
+          time: log.created_at ? new Date(log.created_at).toLocaleTimeString() : 'recently',
+          severity: log.outcome === 'SUCCESS' ? 'success' : 'critical',
         }));
-
         if (mappedLogs.length > 0) {
           setCriticalEvents(mappedLogs);
         }
-
-        // Dynamic health score calculation
-        const latestAcc = trendData.length > 0 ? trendData[trendData.length - 1].accuracy : 99.2;
-        const robotHealth = activeCount / Math.max(robotsList.length, 1);
-        const calculated = Math.round(latestAcc * 0.7 + robotHealth * 30);
-        setHealthScore(Math.min(99, Math.max(70, calculated)));
       } catch (err) {
         console.error('Failed to load executive dashboard data:', err);
       }
@@ -225,12 +248,14 @@ export default function ExecutiveDashboard() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              const headers = ['Metric', 'Current Value', 'Status Target'];
+              const headers = ['Metric', 'Current Value', 'Status'];
               const rows = [
-                ['Warehouse Health Score', `${healthScore}%`, 'Target: >95%'],
-                ['Reconciliation Accuracy', '99.2%', 'Target: >99.0%'],
-                ['Active AMR Fleet', `${robotUtilization.find(r => r.name === 'Active')?.value || 4} Active`, '7 Total'],
-                ['Open Alerts', '15 Open Alerts', '3 Critical'],
+                ['Warehouse Health Score', kpis ? `${kpis.health_score.toFixed(1)}%` : `${healthScore}%`, 'Target: >95%'],
+                ['Inventory Accuracy', kpis ? `${kpis.inventory_accuracy.toFixed(1)}%` : 'Loading...', 'Target: >99.0%'],
+                ['Mission Success Rate', kpis ? `${kpis.mission_success_rate.toFixed(1)}%` : 'Loading...', 'Target: >90%'],
+                ['Robot Fleet Uptime', kpis ? `${kpis.robot_uptime.toFixed(1)}%` : 'Loading...', 'Target: >85%'],
+                ['Open Alerts', kpis ? `${kpis.open_alerts}` : 'Loading...', 'Target: <5'],
+                ['Active Missions', kpis ? `${kpis.active_missions}` : 'Loading...', ''],
               ];
               exportToCsv('executive_dashboard_summary', headers, rows);
             }}
@@ -259,36 +284,36 @@ export default function ExecutiveDashboard() {
         <div className="lg:col-span-4 grid grid-cols-2 xl:grid-cols-4 gap-4">
           <KpiCard
             title="Inventory Accuracy"
-            value="99.2%"
-            trend="up"
-            change="+0.4%"
+            value={kpis ? `${kpis.inventory_accuracy.toFixed(1)}%` : '—'}
+            trend={kpis && kpis.inventory_accuracy >= 95 ? 'up' : 'down'}
+            change={kpis ? `${kpis.inventory_accuracy >= 95 ? '+' : ''}${(kpis.inventory_accuracy - 95).toFixed(1)}%` : '—'}
             data={accuracyTrend}
             color="#10b981"
             icon={CheckCircle2}
           />
           <KpiCard
             title="Mission Success Rate"
-            value="94.1%"
-            trend="up"
-            change="+1.2%"
+            value={kpis ? `${kpis.mission_success_rate.toFixed(1)}%` : '—'}
+            trend={kpis && kpis.mission_success_rate >= 90 ? 'up' : 'down'}
+            change={kpis ? `${kpis.mission_success_rate >= 90 ? '+' : ''}${(kpis.mission_success_rate - 90).toFixed(1)}%` : '—'}
             data={accuracyTrend}
             color="#6366f1"
             icon={Activity}
           />
           <KpiCard
-            title="Alert Resolution SLA"
-            value="28 min avg"
-            trend="down"
-            change="-3min"
+            title="Open Alerts"
+            value={kpis ? `${kpis.open_alerts} open` : '—'}
+            trend={kpis && kpis.open_alerts <= 5 ? 'up' : 'down'}
+            change={kpis ? (kpis.open_alerts <= 5 ? 'low volume' : 'needs attention') : '—'}
             data={accuracyTrend}
             color="#f59e0b"
             icon={Clock}
           />
           <KpiCard
             title="Robot Fleet Uptime"
-            value="91.3%"
-            trend="up"
-            change="+2.1%"
+            value={kpis ? `${kpis.robot_uptime.toFixed(1)}%` : '—'}
+            trend={kpis && kpis.robot_uptime >= 80 ? 'up' : 'down'}
+            change={kpis ? `${kpis.robot_uptime >= 80 ? '+' : ''}${(kpis.robot_uptime - 80).toFixed(1)}%` : '—'}
             data={accuracyTrend}
             color="#8b5cf6"
             icon={Bot}

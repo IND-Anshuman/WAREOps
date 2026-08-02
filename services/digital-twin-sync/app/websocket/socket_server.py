@@ -304,3 +304,29 @@ async def leave_warehouse(sid: str, data: Any) -> dict[str, Any]:
     await sio.leave_room(sid, room, namespace=NAMESPACE)
     logger.info("socket_left_warehouse", sid=sid, warehouse_id=warehouse_id)
     return {"status": "ok", "warehouse_id": warehouse_id}
+
+
+@sio.event(namespace=NAMESPACE)
+async def execute_command(sid: str, data: Any) -> None:
+    """Relay a command from the dashboard to the scanner."""
+    if not isinstance(data, dict):
+        return
+    warehouse_id = data.get("warehouse_id")
+    if not warehouse_id:
+        return
+    room = f"warehouse:{warehouse_id}"
+    logger.info(f"Relaying command to {room}: {data.get('command')}")
+    await sio.emit("execute_command", data, room=room, namespace=NAMESPACE, skip_sid=sid)
+
+
+@sio.event(namespace=NAMESPACE)
+async def command_output(sid: str, data: Any) -> None:
+    """Relay command output from the scanner back to the dashboard."""
+    if not isinstance(data, dict):
+        return
+    warehouse_id = data.get("warehouse_id")
+    if not warehouse_id:
+        return
+    room = f"warehouse:{warehouse_id}"
+    logger.info(f"Relaying command output to {room}")
+    await sio.emit("command_output", data, room=room, namespace=NAMESPACE, skip_sid=sid)

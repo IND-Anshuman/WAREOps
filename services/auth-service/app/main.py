@@ -19,6 +19,7 @@ from app.api.v1.auth_router import router as auth_router
 from app.api.v1.admin_router import router as admin_router
 
 # Configure structured logging
+import logging
 structlog.configure(
     processors=[
         structlog.contextvars.merge_contextvars,
@@ -27,7 +28,9 @@ structlog.configure(
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.JSONRenderer(),
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(settings.LOG_LEVEL),
+    wrapper_class=structlog.make_filtering_bound_logger(
+        getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+    ),
 )
 
 log = structlog.get_logger(__name__)

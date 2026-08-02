@@ -37,11 +37,12 @@ from app.schemas.auth import (
     UserResponse,
     UserUpdateRequest,
 )
-from app.services.auth_service import AuthService
+from app.services.auth_service import AuthService, build_user_response
 
 log = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
 
 
 def _get_client_ip(request: Request) -> str:
@@ -269,7 +270,7 @@ async def get_me(
     db_user = await repo.get_user_by_id(user.user_id)
     if not db_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserResponse.model_validate(db_user)
+    return await build_user_response(db, db_user)
 
 
 # ── PUT /me ────────────────────────────────────────────────────────────────────
@@ -299,7 +300,7 @@ async def update_me(
     updated = await repo.update_user(user.user_id, **update_data)
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return UserResponse.model_validate(updated)
+    return await build_user_response(db, updated)
 
 
 # ── POST /me/change-password ───────────────────────────────────────────────────

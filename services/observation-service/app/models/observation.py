@@ -22,7 +22,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID as PgUUID,  JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -49,25 +49,21 @@ class Observation(Base):
     # ── Foreign keys ──────────────────────────────────────────────────────────
     mission_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("missions.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
     robot_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("robots.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
     warehouse_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("warehouses.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
     bin_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        ForeignKey("bins.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

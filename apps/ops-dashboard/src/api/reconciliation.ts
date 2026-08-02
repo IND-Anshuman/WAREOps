@@ -14,12 +14,12 @@ export const reconciliationApi = {
   getInventory: async (
     params: InventoryQueryParams = {},
   ): Promise<PaginatedResponse<Inventory>> => {
-    const { data } = await apiClient.get('/api/v1/inventory', { params });
+    const { data } = await apiClient.get('/inventory', { params });
     return data;
   },
 
   getInventoryItem: async (id: string): Promise<Inventory> => {
-    const { data } = await apiClient.get(`/api/v1/inventory/${id}`);
+    const { data } = await apiClient.get(`/inventory/${id}`);
     return data;
   },
 
@@ -28,21 +28,21 @@ export const reconciliationApi = {
     payload: { actualQuantity: number; notes?: string },
   ): Promise<Inventory> => {
     const { data } = await apiClient.post(
-      `/api/v1/inventory/bins/${binId}/reconcile`,
+      `/inventory/bins/${binId}/reconcile`,
       payload,
     );
     return data;
   },
 
   getAccuracyReport: async (warehouseId: string) => {
-    const { data } = await apiClient.get('/api/v1/inventory/accuracy-report', {
+    const { data } = await apiClient.get('/inventory/accuracy-report', {
       params: { warehouseId },
     });
     return data;
   },
 
   exportReconciliationReport: async (warehouseId: string): Promise<Blob> => {
-    const { data } = await apiClient.get('/api/v1/inventory/export', {
+    const { data } = await apiClient.get('/inventory/export', {
       params: { warehouseId },
       responseType: 'blob',
     });

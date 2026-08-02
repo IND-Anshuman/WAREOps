@@ -59,7 +59,7 @@ CREATE TABLE aisles (
     zone_id         UUID NOT NULL REFERENCES zones(id) ON DELETE CASCADE,
     code            VARCHAR(50) NOT NULL,
     aisle_number    INT NOT NULL,
-    direction       VARCHAR(10) DEFAULT 'NORTH_SOUTH',  -- NORTH_SOUTH, EAST_WEST
+    direction       VARCHAR(15) DEFAULT 'NORTH_SOUTH',  -- NORTH_SOUTH, EAST_WEST
     start_coord_x   NUMERIC(10, 4),
     start_coord_y   NUMERIC(10, 4),
     end_coord_x     NUMERIC(10, 4),
@@ -208,6 +208,8 @@ CREATE TABLE missions (
     total_bins_target INT DEFAULT 0,
     total_bins_scanned INT DEFAULT 0,
     coverage_pct    NUMERIC(5, 2) DEFAULT 0,
+    audit_scope     VARCHAR(50),      -- FULL, ZONE, AISLE, RACK, BIN
+    target_scope_id VARCHAR(255),     -- zone code, aisle code, rack code, or bin code/id
     metadata        JSONB DEFAULT '{}',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -303,57 +305,8 @@ CREATE TABLE alerts (
 
 -- ─────────────────────────────────────────────
 -- IDENTITY & AUDIT DOMAIN
--- ─────────────────────────────────────────────
-
-CREATE TABLE users (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    email           VARCHAR(255) UNIQUE NOT NULL,
-    username        VARCHAR(100) UNIQUE NOT NULL,
-    full_name       VARCHAR(255),
-    role            user_role NOT NULL DEFAULT 'VIEWER',
-    is_active       BOOLEAN DEFAULT TRUE,
-    last_login_at   TIMESTAMPTZ,
-    password_hash   VARCHAR(255),
-    warehouse_ids   UUID[] DEFAULT '{}',  -- warehouses this user can access
-    metadata        JSONB DEFAULT '{}',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE audit_logs (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id         UUID REFERENCES users(id),
-    warehouse_id    UUID REFERENCES warehouses(id),
-    action          VARCHAR(100) NOT NULL,
-    resource_type   VARCHAR(100),
-    resource_id     UUID,
-    old_value       JSONB,
-    new_value       JSONB,
-    ip_address      INET,
-    user_agent      TEXT,
-    request_id      UUID,
-    performed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Transactional outbox for reliable event publishing
-CREATE TABLE outbox_events (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    aggregate_type  VARCHAR(100) NOT NULL,
-    aggregate_id    UUID NOT NULL,
-    event_type      VARCHAR(200) NOT NULL,
-    topic           VARCHAR(200) NOT NULL,
-    partition_key   VARCHAR(200),
-    payload         JSONB NOT NULL,
-    headers         JSONB DEFAULT '{}',
-    status          VARCHAR(50) DEFAULT 'PENDING',
-    retry_count     INT DEFAULT 0,
-    last_error      TEXT,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    processed_at    TIMESTAMPTZ,
-    scheduled_for   TIMESTAMPTZ DEFAULT NOW()
-);
-
--- ─────────────────────────────────────────────
+-- NOTE: users, audit_logs, outbox_events are created by auth-service ORM.
+-- Do NOT define them here to avoid schema conflicts.
 -- INDICES
 -- ─────────────────────────────────────────────
 
@@ -392,8 +345,7 @@ CREATE INDEX idx_alerts_created ON alerts(created_at DESC);
 CREATE INDEX idx_alerts_bin ON alerts(bin_id);
 
 -- Outbox index for polling worker
-CREATE INDEX idx_outbox_status_scheduled ON outbox_events(status, scheduled_for)
-    WHERE status = 'PENDING';
+-- Outbox index removed (outbox_events table managed by auth-service ORM)
 
 -- Inventory index
 CREATE INDEX idx_inventory_bin ON inventory(bin_id);
@@ -404,14 +356,6 @@ CREATE INDEX idx_inventory_sku ON inventory(sku);
 -- ─────────────────────────────────────────────
 
 -- Default admin user (password: admin123 - bcrypt hash)
-INSERT INTO users (email, username, full_name, role, password_hash) VALUES
-    ('admin@warehouse-platform.local', 'admin', 'Platform Administrator', 'PLATFORM_ADMIN',
-     '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-    ('manager@warehouse-platform.local', 'manager', 'Warehouse Manager', 'WAREHOUSE_MANAGER',
-     '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW'),
-    ('operator@warehouse-platform.local', 'operator', 'Floor Operator', 'OPERATOR',
-     '$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW');
-
 -- Default Demo Warehouse
 INSERT INTO warehouses (id, code, name, address, city, country, total_area_sqm, timezone)
 VALUES (
@@ -441,26 +385,22 @@ INSERT INTO products (sku, name, category, unit_of_measure, weight_kg) VALUES
     ('SKU-TOY-101', 'LEGO Star Wars Millennium Falcon', 'Toys', 'EACH', 4.2),
     ('SKU-MED-050', 'Premium First Aid Kit', 'Medical', 'EACH', 1.2);
 
--- Demo Users for All 4 Roles
-INSERT INTO users (id, email, password_hash, display_name, role, org_id, is_active, mfa_enabled) VALUES
-    ('11111111-1111-1111-1111-111111111111', 'admin@wareops.dev', '$2b$12$KIXx5jY3O6XqG7L2A2cW1.e.aQ0Y3Y1w1u1u1u1u1u1u1u1u1u1u', 'Alex Rivera', 'ENTERPRISE_ADMIN', 'org-001', true, true),
-    ('22222222-2222-2222-2222-222222222222', 'manager@wareops.dev', '$2b$12$KIXx5jY3O6XqG7L2A2cW1.e.aQ0Y3Y1w1u1u1u1u1u1u1u1u1u1u', 'Sarah Chen', 'WAREHOUSE_MANAGER', 'org-001', true, true),
-    ('33333333-3333-3333-3333-333333333333', 'supervisor@wareops.dev', '$2b$12$KIXx5jY3O6XqG7L2A2cW1.e.aQ0Y3Y1w1u1u1u1u1u1u1u1u1u1u', 'Marcus Johnson', 'WAREHOUSE_SUPERVISOR', 'org-001', true, false),
-    ('44444444-4444-4444-4444-444444444444', 'operator@wareops.dev', '$2b$12$KIXx5jY3O6XqG7L2A2cW1.e.aQ0Y3Y1w1u1u1u1u1u1u1u1u1u1u', 'Priya Patel', 'WAREHOUSE_OPERATOR', 'org-001', true, false);
+-- NOTE: Auth-domain users (admin@wareops.dev, etc.) are seeded by the auth-service
+-- via its ORM (app/seed.py). Do NOT duplicate user inserts here.
 
 -- Demo Robots
-INSERT INTO robots (id, warehouse_id, code, name, status, battery_level_pct, ip_address) VALUES
-    ('r1111111-1111-1111-1111-111111111111', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-01', 'Titan Alpha', 'ONLINE', 92, '192.168.1.101'),
-    ('r2222222-2222-2222-2222-222222222222', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-02', 'Scout Beta', 'ONLINE', 78, '192.168.1.102'),
-    ('r3333333-3333-3333-3333-333333333333', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-03', 'Ranger Gamma', 'CHARGING', 45, '192.168.1.103');
+INSERT INTO robots (id, warehouse_id, serial_number, name, status, battery_pct) VALUES
+    ('a1110000-1111-1111-1111-111111111111', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-01', 'Titan Alpha', 'IDLE', 92),
+    ('a2220000-2222-2222-2222-222222222222', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-02', 'Scout Beta', 'IDLE', 78),
+    ('a3330000-3333-3333-3333-333333333333', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'AMR-03', 'Ranger Gamma', 'CHARGING', 45);
 
 -- Demo Missions
-INSERT INTO missions (id, warehouse_id, robot_id, name, status, total_target_bins, audited_bins_count) VALUES
-    ('m1111111-1111-1111-1111-111111111111', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'r1111111-1111-1111-1111-111111111111', 'Zone A High-Bay Audit', 'IN_PROGRESS', 50, 36),
-    ('m2222222-2222-2222-2222-222222222222', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'r2222222-2222-2222-2222-222222222222', 'Aisle 3 Spot Check', 'SCHEDULED', 16, 0);
+INSERT INTO missions (id, warehouse_id, robot_id, name, status, total_bins_target, total_bins_scanned, audit_scope, target_scope_id) VALUES
+    ('b1110000-1111-1111-1111-111111111111', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'a1110000-1111-1111-1111-111111111111', 'Zone A High-Bay Audit', 'IN_PROGRESS', 50, 36, 'FULL', NULL),
+    ('b2220000-2222-2222-2222-222222222222', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'a2220000-2222-2222-2222-222222222222', 'Aisle 3 Spot Check', 'SCHEDULED', 16, 0, 'AISLE', 'A1');
 
 -- Demo Alerts
-INSERT INTO alerts (id, warehouse_id, type, severity, status, title, description) VALUES
+INSERT INTO alerts (id, warehouse_id, alert_type, severity, status, title, description) VALUES
     ('a1111111-1111-1111-1111-111111111111', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'MISPLACED', 'CRITICAL', 'OPEN', 'Critical SKU Mismatch — Bin A1-R2-S3-B1', 'Intel Core i9 expected but Standing Desk SKU found.'),
     ('a2222222-2222-2222-2222-222222222222', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'MISSING', 'HIGH', 'OPEN', 'Product Missing from Bin B2-R1-S4-B2', 'Samsung 4K Monitor expected but bin appears empty.');
 
@@ -485,8 +425,6 @@ CREATE TRIGGER update_robots_updated_at BEFORE UPDATE ON robots
 CREATE TRIGGER update_missions_updated_at BEFORE UPDATE ON missions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_alerts_updated_at BEFORE UPDATE ON alerts
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON products
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

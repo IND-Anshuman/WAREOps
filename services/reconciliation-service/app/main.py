@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from app.config import get_settings
 from app.database import init_db, close_db, Base, _engine
 from app.api.v1.reconciliation_router import router as reconciliation_router
+from app.api.v1.analytics_router import router as analytics_router
 from app.models.reconciliation import Base
 
 logger = structlog.get_logger(__name__)
@@ -49,6 +50,7 @@ app.add_middleware(
 Instrumentator().instrument(app).expose(app)
 
 app.include_router(reconciliation_router)
+app.include_router(analytics_router)
 
 @app.get("/health", tags=["system"])
 async def health_check():

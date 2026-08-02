@@ -42,7 +42,24 @@ _SYSTEM_ROLES: list[dict] = [
             ("inventory", "read"),
             ("mission", "read"),
             ("mission", "execute"),
+            ("alert", "read"),
             ("robot", "read"),
+            ("twin", "read"),
+            ("twin", "view"),
+        ],
+    },
+    {
+        "name": "OPERATOR",
+        "display_name": "Warehouse Operator",
+        "description": "Day-to-day warehouse floor operations (alias)",
+        "permissions": [
+            ("inventory", "read"),
+            ("mission", "read"),
+            ("mission", "execute"),
+            ("alert", "read"),
+            ("robot", "read"),
+            ("twin", "read"),
+            ("twin", "view"),
         ],
     },
     {
@@ -52,12 +69,40 @@ _SYSTEM_ROLES: list[dict] = [
         "permissions": [
             ("inventory", "read"),
             ("inventory", "update"),
+            ("inventory", "rescan"),
             ("mission", "read"),
             ("mission", "create"),
             ("mission", "execute"),
             ("mission", "cancel"),
+            ("alert", "read"),
+            ("alert", "resolve"),
+            ("alert", "acknowledge"),
             ("robot", "read"),
             ("robot", "control"),
+            ("twin", "read"),
+            ("twin", "view"),
+            ("report", "read"),
+        ],
+    },
+    {
+        "name": "SUPERVISOR",
+        "display_name": "Warehouse Supervisor",
+        "description": "Supervises operators and manages missions (alias)",
+        "permissions": [
+            ("inventory", "read"),
+            ("inventory", "update"),
+            ("inventory", "rescan"),
+            ("mission", "read"),
+            ("mission", "create"),
+            ("mission", "execute"),
+            ("mission", "cancel"),
+            ("alert", "read"),
+            ("alert", "resolve"),
+            ("alert", "acknowledge"),
+            ("robot", "read"),
+            ("robot", "control"),
+            ("twin", "read"),
+            ("twin", "view"),
             ("report", "read"),
         ],
     },
@@ -70,18 +115,69 @@ _SYSTEM_ROLES: list[dict] = [
             ("inventory", "create"),
             ("inventory", "update"),
             ("inventory", "delete"),
+            ("inventory", "rescan"),
             ("mission", "read"),
             ("mission", "create"),
             ("mission", "execute"),
             ("mission", "cancel"),
             ("mission", "delete"),
+            ("alert", "read"),
+            ("alert", "create"),
+            ("alert", "update"),
+            ("alert", "resolve"),
+            ("alert", "acknowledge"),
+            ("alert", "dismiss"),
             ("robot", "read"),
             ("robot", "control"),
             ("robot", "configure"),
+            ("twin", "read"),
+            ("twin", "view"),
+            ("twin", "update"),
             ("report", "read"),
             ("report", "export"),
             ("user", "read"),
+            ("users", "read"),
             ("user", "invite"),
+            ("users", "write"),
+            ("settings", "read"),
+            ("org", "read"),
+        ],
+    },
+    {
+        "name": "MANAGER",
+        "display_name": "Warehouse Manager",
+        "description": "Full warehouse management including user management (alias)",
+        "permissions": [
+            ("inventory", "read"),
+            ("inventory", "create"),
+            ("inventory", "update"),
+            ("inventory", "delete"),
+            ("inventory", "rescan"),
+            ("mission", "read"),
+            ("mission", "create"),
+            ("mission", "execute"),
+            ("mission", "cancel"),
+            ("mission", "delete"),
+            ("alert", "read"),
+            ("alert", "create"),
+            ("alert", "update"),
+            ("alert", "resolve"),
+            ("alert", "acknowledge"),
+            ("alert", "dismiss"),
+            ("robot", "read"),
+            ("robot", "control"),
+            ("robot", "configure"),
+            ("twin", "read"),
+            ("twin", "view"),
+            ("twin", "update"),
+            ("report", "read"),
+            ("report", "export"),
+            ("user", "read"),
+            ("users", "read"),
+            ("user", "invite"),
+            ("users", "write"),
+            ("settings", "read"),
+            ("org", "read"),
         ],
     },
     {
@@ -93,30 +189,46 @@ _SYSTEM_ROLES: list[dict] = [
             ("inventory", "create"),
             ("inventory", "update"),
             ("inventory", "delete"),
+            ("inventory", "rescan"),
             ("mission", "read"),
             ("mission", "create"),
             ("mission", "execute"),
             ("mission", "cancel"),
             ("mission", "delete"),
+            ("alert", "read"),
+            ("alert", "create"),
+            ("alert", "update"),
+            ("alert", "resolve"),
+            ("alert", "acknowledge"),
+            ("alert", "dismiss"),
             ("robot", "read"),
             ("robot", "control"),
             ("robot", "configure"),
             ("robot", "decommission"),
+            ("twin", "read"),
+            ("twin", "view"),
+            ("twin", "update"),
             ("report", "read"),
             ("report", "export"),
             ("user", "read"),
+            ("users", "read"),
             ("user", "create"),
             ("user", "update"),
             ("user", "delete"),
+            ("users", "write"),
             ("user", "invite"),
             ("org", "read"),
             ("org", "update"),
+            ("settings", "read"),
+            ("settings", "write"),
+            ("compliance", "read"),
             ("audit", "read"),
             ("role", "read"),
             ("role", "assign"),
         ],
     },
 ]
+
 
 
 class AuthRepository:
@@ -362,30 +474,36 @@ class AuthRepository:
         return perm
 
     async def seed_default_roles(self, org_id: uuid.UUID) -> list[Role]:
-        """Create the 4 system roles with their permissions for a new organization."""
+        """Create system roles with their permissions for an organization idempotently."""
         created_roles: list[Role] = []
         for role_def in _SYSTEM_ROLES:
-            # Check if role already exists (idempotent)
             existing = await self.get_role_by_name(org_id, role_def["name"])
             if existing:
-                created_roles.append(existing)
-                continue
+                role = existing
+            else:
+                role = Role(
+                    org_id=org_id,
+                    name=role_def["name"],
+                    display_name=role_def["display_name"],
+                    description=role_def["description"],
+                    is_system_role=True,
+                )
+                self.db.add(role)
+                await self.db.flush([role])
 
-            role = Role(
-                org_id=org_id,
-                name=role_def["name"],
-                display_name=role_def["display_name"],
-                description=role_def["description"],
-                is_system_role=True,
+            # Query existing permission IDs for this role to avoid duplicate inserts
+            perm_res = await self.db.execute(
+                select(RolePermission.permission_id).where(RolePermission.role_id == role.id)
             )
-            self.db.add(role)
-            await self.db.flush([role])
+            existing_perm_ids = set(perm_res.scalars().all())
 
             # Attach permissions
             for resource, action in role_def["permissions"]:
                 perm = await self._get_or_create_permission(resource, action)
-                rp = RolePermission(role_id=role.id, permission_id=perm.id)
-                self.db.add(rp)
+                if perm.id not in existing_perm_ids:
+                    rp = RolePermission(role_id=role.id, permission_id=perm.id)
+                    self.db.add(rp)
+                    existing_perm_ids.add(perm.id)
 
             await self.db.flush()
             await self.db.refresh(role)

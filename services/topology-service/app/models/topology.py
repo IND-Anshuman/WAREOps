@@ -1,3 +1,4 @@
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy import Column, String, Integer, Numeric, Boolean, DateTime, ForeignKey, Table
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
@@ -7,7 +8,7 @@ Base = declarative_base()
 
 class Warehouse(Base):
     __tablename__ = 'warehouses'
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id = Column(PgUUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
     code = Column(String(50), unique=True, nullable=False)
     name = Column(String(255), nullable=False)
     address = Column(String)
@@ -23,8 +24,8 @@ class Warehouse(Base):
 
 class Zone(Base):
     __tablename__ = 'zones'
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    warehouse_id = Column(String, ForeignKey('warehouses.id', ondelete='CASCADE'), nullable=False)
+    id = Column(PgUUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    warehouse_id = Column(PgUUID(as_uuid=False), ForeignKey('warehouses.id', ondelete='CASCADE'), nullable=False)
     code = Column(String(50), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(String)
@@ -38,11 +39,11 @@ class Zone(Base):
 
 class Aisle(Base):
     __tablename__ = 'aisles'
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    zone_id = Column(String, ForeignKey('zones.id', ondelete='CASCADE'), nullable=False)
+    id = Column(PgUUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    zone_id = Column(PgUUID(as_uuid=False), ForeignKey('zones.id', ondelete='CASCADE'), nullable=False)
     code = Column(String(50), nullable=False)
     aisle_number = Column(Integer, nullable=False)
-    direction = Column(String(10), default='NORTH_SOUTH')
+    direction = Column(String(15), default='NORTH_SOUTH')
     start_coord_x = Column(Numeric(10, 4))
     start_coord_y = Column(Numeric(10, 4))
     end_coord_x = Column(Numeric(10, 4))
@@ -54,8 +55,8 @@ class Aisle(Base):
 
 class Rack(Base):
     __tablename__ = 'racks'
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    aisle_id = Column(String, ForeignKey('aisles.id', ondelete='CASCADE'), nullable=False)
+    id = Column(PgUUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    aisle_id = Column(PgUUID(as_uuid=False), ForeignKey('aisles.id', ondelete='CASCADE'), nullable=False)
     code = Column(String(100), nullable=False)
     rack_number = Column(Integer, nullable=False)
     side = Column(String(10), default='LEFT')
@@ -73,8 +74,8 @@ class Rack(Base):
 
 class Shelf(Base):
     __tablename__ = 'shelves'
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    rack_id = Column(String, ForeignKey('racks.id', ondelete='CASCADE'), nullable=False)
+    id = Column(PgUUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    rack_id = Column(PgUUID(as_uuid=False), ForeignKey('racks.id', ondelete='CASCADE'), nullable=False)
     code = Column(String(100), nullable=False)
     level_number = Column(Integer, nullable=False)
     height_from_floor_cm = Column(Numeric(8, 2))
@@ -86,8 +87,8 @@ class Shelf(Base):
 
 class Bin(Base):
     __tablename__ = 'bins'
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    shelf_id = Column(String, ForeignKey('shelves.id', ondelete='CASCADE'), nullable=False)
+    id = Column(PgUUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()))
+    shelf_id = Column(PgUUID(as_uuid=False), ForeignKey('shelves.id', ondelete='CASCADE'), nullable=False)
     code = Column(String(150), nullable=False, unique=True)
     bin_number = Column(Integer, nullable=False)
     coord_x = Column(Numeric(10, 4))

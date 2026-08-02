@@ -5,7 +5,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { observationsApi } from '../../api/observations';
 import { inventoryApi, alertsApi } from '../../api/client';
-import type { PendingObservation } from '../../api/mockData';
+import type { PendingObservation } from '../../types';
 
 export default function VerificationQueue() {
   const [observations, setObservations] = useState<PendingObservation[]>([]);

@@ -16,6 +16,8 @@ import pyotp
 import qrcode
 import structlog
 from fastapi import HTTPException, status
+from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -34,7 +36,7 @@ from app.core.security import (
     is_password_strong,
     verify_password,
 )
-from app.models.auth import InviteToken, User
+from app.models.auth import InviteToken, User, UserRole, Role, RolePermission, Permission
 from app.repositories.auth_repo import AuthRepository
 from app.schemas.auth import (
     InviteCreateRequest,
@@ -48,7 +50,60 @@ from app.schemas.auth import (
 log = structlog.get_logger(__name__)
 
 
-# ── Email helpers ──────────────────────────────────────────────────────────────
+# ── Email & Profile helpers ───────────────────────────────────────────────────
+
+async def build_user_profile(session: AsyncSession, user: User | uuid.UUID) -> dict[str, Any]:
+    """
+    Query UserRole -> Role -> RolePermission -> Permission and warehouse_ids for a user.
+    Returns dict with keys: 'role', 'warehouse_ids', 'permissions'.
+    """
+    user_id = user.id if hasattr(user, "id") else user
+    stmt = (
+        select(UserRole)
+        .where(UserRole.user_id == user_id)
+        .options(
+            selectinload(UserRole.role)
+            .selectinload(Role.role_permissions)
+            .selectinload(RolePermission.permission)
+        )
+    )
+    result = await session.execute(stmt)
+    user_roles = list(result.scalars().all())
+
+    role_name = "WAREHOUSE_OPERATOR"
+    warehouse_ids: list[uuid.UUID] = []
+    permissions_set: set[str] = set()
+
+    if user_roles:
+        primary_ur = user_roles[0]
+        if primary_ur.role and primary_ur.role.name:
+            role_name = primary_ur.role.name
+
+        for ur in user_roles:
+            if ur.warehouse_id and ur.warehouse_id not in warehouse_ids:
+                warehouse_ids.append(ur.warehouse_id)
+
+            if ur.role and ur.role.role_permissions:
+                for rp in ur.role.role_permissions:
+                    if rp.permission and rp.permission.resource and rp.permission.action:
+                        permissions_set.add(f"{rp.permission.resource}:{rp.permission.action}")
+
+    return {
+        "role": role_name,
+        "warehouse_ids": warehouse_ids,
+        "permissions": sorted(list(permissions_set)),
+    }
+
+
+async def build_user_response(session: AsyncSession, user: User) -> UserResponse:
+    """Construct a UserResponse object with joined role, warehouse_ids, and permissions."""
+    profile = await build_user_profile(session, user)
+    user_dict = UserResponse.model_validate(user).model_dump()
+    user_dict["role"] = profile["role"]
+    user_dict["warehouse_ids"] = profile["warehouse_ids"]
+    user_dict["permissions"] = profile["permissions"]
+    return UserResponse(**user_dict)
+
 
 async def _send_email(to: str, subject: str, body: str) -> None:
     """
@@ -86,14 +141,21 @@ async def _send_email(to: str, subject: str, body: str) -> None:
         log.error("email.send_failed", to=to, subject=subject, error=str(exc))
 
 
-def _build_user_token_payload(user: User, permissions: list[str], session_id: uuid.UUID) -> dict[str, Any]:
+def _build_user_token_payload(
+    user: User,
+    role: str,
+    warehouse_ids: list[uuid.UUID],
+    permissions: list[str],
+    session_id: uuid.UUID,
+) -> dict[str, Any]:
     """Construct the JWT payload for an authenticated user."""
-    # Get first role name from user_roles (loaded separately)
     return {
         "sub": str(user.id),
         "email": user.email,
         "org_id": str(user.org_id),
         "session_id": str(session_id),
+        "role": role,
+        "warehouse_ids": [str(w) for w in warehouse_ids],
         "permissions": permissions,
     }
 
@@ -220,13 +282,14 @@ class AuthService:
                 "device_fingerprint": device_fingerprint,
             })
             await redis.setex(challenge_key, 300, challenge_data)
+            user_resp = await build_user_response(db, user)
             return {
                 "requires_mfa": True,
                 "mfa_challenge_token": challenge_id,
                 "access_token": "",
                 "token_type": "bearer",
                 "expires_in": 0,
-                "user": UserResponse.model_validate(user),
+                "user": user_resp,
             }
 
         # 7. Issue tokens and create session
@@ -302,9 +365,7 @@ class AuthService:
         repo: AuthRepository,
     ) -> dict[str, Any]:
         """Create refresh token, session record, and access token. Write audit log."""
-        permissions = await repo.get_user_permissions(user.id)
-        user_roles = await repo.get_user_roles(user.id)
-        primary_role = user_roles[0].role.name if user_roles else "NONE"
+        profile = await build_user_profile(db, user)
 
         raw_refresh = create_refresh_token()
         refresh_hash = hash_token(raw_refresh)
@@ -319,8 +380,13 @@ class AuthService:
             ip=ip,
         )
 
-        payload = _build_user_token_payload(user, permissions, session.id)
-        payload["role"] = primary_role
+        payload = _build_user_token_payload(
+            user=user,
+            role=profile["role"],
+            warehouse_ids=profile["warehouse_ids"],
+            permissions=profile["permissions"],
+            session_id=session.id,
+        )
         access_token = create_access_token(payload)
 
         await repo.update_last_login(user.id, ip)
@@ -330,12 +396,14 @@ class AuthService:
             event_type=AuditEventType.USER_LOGIN_SUCCESS,
             org_id=user.org_id,
             actor_user_id=user.id,
-            actor_role=primary_role,
+            actor_role=profile["role"],
             actor_ip=ip,
             resource_type="session",
             resource_id=session.id,
             outcome="SUCCESS",
         )
+
+        user_resp = await build_user_response(db, user)
 
         return {
             "access_token": access_token,
@@ -343,7 +411,7 @@ class AuthService:
             "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             "refresh_token": raw_refresh,
             "requires_mfa": False,
-            "user": UserResponse.model_validate(user),
+            "user": user_resp,
         }
 
     # ── Refresh tokens ─────────────────────────────────────────────────────────
@@ -394,9 +462,7 @@ class AuthService:
         await repo.revoke_session(session.id, "token_rotation")
 
         # Issue new refresh token + session
-        permissions = await repo.get_user_permissions(user.id)
-        user_roles = await repo.get_user_roles(user.id)
-        primary_role = user_roles[0].role.name if user_roles else "NONE"
+        profile = await build_user_profile(db, user)
 
         new_raw_refresh = create_refresh_token()
         new_hash = hash_token(new_raw_refresh)
@@ -411,8 +477,13 @@ class AuthService:
             ip=session.ip_address,
         )
 
-        payload = _build_user_token_payload(user, permissions, new_session.id)
-        payload["role"] = primary_role
+        payload = _build_user_token_payload(
+            user=user,
+            role=profile["role"],
+            warehouse_ids=profile["warehouse_ids"],
+            permissions=profile["permissions"],
+            session_id=new_session.id,
+        )
         access_token = create_access_token(payload)
 
         await write_audit_log(
@@ -420,7 +491,7 @@ class AuthService:
             event_type=AuditEventType.TOKEN_REFRESHED,
             org_id=user.org_id,
             actor_user_id=user.id,
-            actor_role=primary_role,
+            actor_role=profile["role"],
             outcome="SUCCESS",
         )
 
@@ -536,7 +607,7 @@ class AuthService:
             metadata={"via": "invite", "invite_id": str(invite.id)},
         )
 
-        return UserResponse.model_validate(user)
+        return await build_user_response(db, user)
 
     # ── Forgot Password ────────────────────────────────────────────────────────
 

@@ -231,3 +231,52 @@ class DashboardStats(BaseModel):
     total_reconciliations_today: int = 0
     mismatches_today: int = 0
     as_of: datetime
+
+
+class WarehouseKPIs(BaseModel):
+    """Overall warehouse key performance indicators."""
+
+    health_score: float
+    inventory_accuracy: float
+    mission_success_rate: float
+    robot_uptime: float
+    open_alerts: int
+    active_missions: int
+
+
+class AccuracyDataPoint(BaseModel):
+    """Time-series data point for inventory accuracy and alert counts."""
+
+    date: str
+    accuracy: float
+    alerts: int
+
+
+class AlertFrequencyPoint(BaseModel):
+    """Daily breakdown of alerts by severity."""
+
+    date: str
+    CRITICAL: int
+    HIGH: int
+    MEDIUM: int
+    LOW: int
+
+
+class MissionStats(BaseModel):
+    """Summary count of missions by status."""
+
+    total: int
+    completed: int
+    in_progress: int
+    failed: int
+    scheduled: int
+    cancelled: int
+
+
+class RescanResponse(BaseModel):
+    """Result of requesting a rescan mission."""
+
+    status: str = "success"
+    message: str
+    bin_id: str
+    mission_id: str

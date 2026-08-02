@@ -101,7 +101,7 @@ export default function MissionControl() {
     try {
       await missionsApi.createMission({
         name,
-        warehouse_id: 'wh-001',
+        warehouse_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         robot_id: assignedRobotId,
         robot_name: assignedRobot?.name || 'Argus',
         priority: priority as any,

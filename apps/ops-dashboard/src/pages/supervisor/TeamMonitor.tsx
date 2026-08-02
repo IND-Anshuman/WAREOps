@@ -6,10 +6,10 @@ import { Table } from '../../components/ui/Table';
 import { Button } from '../../components/ui/Button';
 import { exportToCsv } from '../../utils/exportCsv';
 import { adminApi, alertsApi } from '../../api/client';
-import { MOCK_TEAM } from '../../api/mockData';
+import type { TeamMember } from '../../types';
 
 export default function TeamMonitor() {
-  const [team, setTeam] = useState(MOCK_TEAM);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [openAlertsCount, setOpenAlertsCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -19,12 +19,27 @@ export default function TeamMonitor() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [logs, alerts] = await Promise.all([
+        const [logs, alerts, users] = await Promise.all([
           adminApi.getAuditLogs().catch(() => []),
           alertsApi.getAlerts().catch(() => []),
+          adminApi.getUsers().catch(() => []),
         ]);
         setAuditLogs(logs);
         setOpenAlertsCount(alerts.filter((a) => a.status === 'OPEN').length);
+        if (Array.isArray(users) && users.length > 0) {
+          setTeam(users.map(u => ({
+            id: u.id,
+            user_id: u.id,
+            display_name: u.display_name || u.email,
+            email: u.email,
+            role: u.role,
+            status: u.status === 'ACTIVE' ? 'ONLINE' : 'OFFLINE',
+            last_action: 'Active on floor',
+            last_action_at: u.last_login_at || new Date().toISOString(),
+            pending_tasks: 0,
+            avg_response_time_min: 8,
+          })));
+        }
       } catch (err) {
         console.error('Failed to load team monitor data:', err);
       } finally {

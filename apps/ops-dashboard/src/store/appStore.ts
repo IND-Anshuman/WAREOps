@@ -20,7 +20,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>()((set, get) => ({
   sidebarCollapsed: false,
-  activeWarehouseId: 'wh-001',
+  activeWarehouseId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   notifications: [],
   unreadCount: 0,
   pageTitle: 'Dashboard',
